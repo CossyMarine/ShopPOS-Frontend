@@ -5,10 +5,10 @@ import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { routeForUser } from "./utils/routeForUser";
 import LoginPage from "./pages/LoginPage";
 import Admin from "./pages/Admin";
-import WaiterPage from "./pages/WaiterPage";
-import KitchenPage from "./pages/KitchenPage";
-import AccountantPage from "./pages/AccountantPage";
+import CashierPage from "./pages/CashierPage";
+import StorekeeperPage from "./pages/StorekeeperPage";
 import CustomerPage from "./pages/CustomerPage";
+import PublicDisplayPage from "./pages/PublicDisplayPage";
 import OrdersPage from "./pages/OrdersPage";
 import WalletPage from "./pages/WalletPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -16,7 +16,6 @@ import ProfileDetailsPage from "./pages/ProfileDetailsPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import VerifyResetCode from "./pages/VerifyResetCode";
 import ResetPassword from "./pages/ResetPassword";
-
 
 function LoadingScreen() {
   return (
@@ -26,6 +25,9 @@ function LoadingScreen() {
   );
 }
 
+// allow: "admin" | "branchManager" | "cashier" | "storekeeper"
+// "admin" also lets a branchManager through when allowManagerToo is set,
+// so /manager and /admin can share the same guard shape without duplicating it.
 function StaffRoute({ user, loading, allow, children }) {
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
@@ -43,7 +45,6 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/home" replace />} />
 
         <Route path="/home" element={<CustomerPage />} />
-        <Route path="/order" element={<Navigate to="/home" replace />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/wallet" element={<WalletPage />} />
         <Route path="/profile" element={<ProfilePage />} />
@@ -51,6 +52,10 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-reset-code" element={<VerifyResetCode />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+
+        {/* Public Customer Display — no login, meant for a register's second
+            monitor. branchId/registerId identify which socket room to join. */}
+        <Route path="/display/:branchId/:registerId" element={<PublicDisplayPage />} />
 
         <Route
           path="/login"
@@ -73,27 +78,29 @@ function AppRoutes() {
             </StaffRoute>
           }
         />
+        {/* Branch Manager gets the same Admin screen, scoped internally to
+            their own branch — see the isAdmin check inside Admin.jsx */}
         <Route
-          path="/waiter"
+          path="/manager"
           element={
-            <StaffRoute user={user} loading={loading} allow="waiter">
-              <WaiterPage />
+            <StaffRoute user={user} loading={loading} allow="branchManager">
+              <Admin />
             </StaffRoute>
           }
         />
         <Route
-          path="/kitchen"
+          path="/cashier"
           element={
-            <StaffRoute user={user} loading={loading} allow="kitchen">
-              <KitchenPage />
+            <StaffRoute user={user} loading={loading} allow="cashier">
+              <CashierPage />
             </StaffRoute>
           }
         />
         <Route
-          path="/accountant"
+          path="/storekeeper"
           element={
-            <StaffRoute user={user} loading={loading} allow="accountant">
-              <AccountantPage />
+            <StaffRoute user={user} loading={loading} allow="storekeeper">
+              <StorekeeperPage />
             </StaffRoute>
           }
         />
