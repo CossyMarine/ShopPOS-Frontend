@@ -1,20 +1,17 @@
 import {
-    LayoutDashboard, UtensilsCrossed, ChefHat, ReceiptText, CreditCard,
-    ShieldAlert, Users, UserCog, Settings, LogOut, Boxes,
+    LayoutDashboard, Boxes, ReceiptText, CreditCard,
+    ShieldAlert, Users, Store, Settings, LogOut,
     UtensilsCrossed as Logo,
 } from 'lucide-react';
 
 export const ADMIN_NAV_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'menu', label: 'Manage Menu', icon: UtensilsCrossed },
-    { id: 'kitchen', label: 'Kitchen', icon: ChefHat },
-    { id: 'inventory', label: 'Inventory', icon: Boxes },
-    { id: 'orders', label: 'Orders & Receipts', icon: ReceiptText },
+    { id: 'products', label: 'Products & Stock', icon: Boxes },
+    { id: 'orders', label: 'Sales & Receipts', icon: ReceiptText },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'voids', label: 'Void Requests', icon: ShieldAlert },
-    { id: 'users', label: 'Users', icon: Users },
-    { id: 'waiters', label: 'Waiter Management', icon: UserCog },
-    { id: 'accountants', label: 'Accountants', icon: UserCog },
+    { id: 'staff', label: 'Staff', icon: Users },
+    { id: 'branches', label: 'Branches', icon: Store },
     { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -28,7 +25,7 @@ export default function AdminSidebar({
                 <div className="flex items-center gap-2">
                     <Logo size={20} className="text-orange-500" />
                     <span className="font-black text-lg text-white">
-                        Resto<span className="text-orange-500">POS</span>
+                        Babylon<span className="text-orange-500">POS</span>
                     </span>
                 </div>
                 <p className="text-[11px] uppercase tracking-wider font-bold text-slate-500 mt-0.5">
