@@ -1,7 +1,6 @@
 import {
     LayoutDashboard, Boxes, ReceiptText, CreditCard,
     ShieldAlert, Users, Store, Settings, LogOut,
-    UtensilsCrossed as Logo,
 } from 'lucide-react';
 
 export const ADMIN_NAV_ITEMS = [
@@ -19,22 +18,34 @@ export default function AdminSidebar({
     activeView, onNavigate, user, onLogout, pendingPaymentsCount = 0,
     navItems = ADMIN_NAV_ITEMS, title = 'Management Console', extra = null,
 }) {
+    const initials = (user?.fullName || 'A')
+        .split(' ')
+        .map((p) => p[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+
     return (
-        <aside className="w-64 bg-slate-900 h-screen sticky top-0 flex flex-col justify-between shrink-0 shadow-lg z-20">
-            <div className="p-6">
-                <div className="flex items-center gap-2">
-                    <Logo size={20} className="text-orange-500" />
-                    <span className="font-black text-lg text-white">
-                        Babylon<span className="text-orange-500">POS</span>
-                    </span>
+        <aside className="w-64 bg-white h-screen sticky top-0 flex flex-col justify-between shrink-0 border-r border-gray-200 shadow-sm z-20">
+            <div>
+                {/* Brand header */}
+                <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
+                    <div className="w-9 h-9 rounded-lg bg-brand-orange flex items-center justify-center font-bold text-lg text-white shadow-md">
+                        B
+                    </div>
+                    <div>
+                        <h1 className="font-extrabold text-base leading-none text-gray-900">
+                            Babylon<span className="text-brand-orange">POS</span>
+                        </h1>
+                        <span className="text-[11px] uppercase tracking-wider font-bold text-gray-500">
+                            {title}
+                        </span>
+                    </div>
                 </div>
-                <p className="text-[11px] uppercase tracking-wider font-bold text-slate-500 mt-0.5">
-                    {title}
-                </p>
 
-                {extra}
+                {extra && <div className="px-4 pt-4">{extra}</div>}
 
-                <nav className="mt-8 space-y-1">
+                <nav className="px-4 py-4 space-y-1 overflow-y-auto max-h-[calc(100vh-220px)]">
                     {navItems.map(({ id, label, icon: Icon }) => {
                         const active = activeView === id;
                         const badge = id === 'payments' ? pendingPaymentsCount : 0;
@@ -42,13 +53,13 @@ export default function AdminSidebar({
                             <button
                                 key={id}
                                 onClick={() => onNavigate(id)}
-                                className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-all ${
+                                className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                                     active
-                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                        : 'text-slate-400 hover:bg-slate-800/60 hover:text-orange-400'
+                                        ? 'bg-brand-orange text-white shadow-sm'
+                                        : 'text-gray-600 hover:bg-brand-orange-light hover:text-brand-orange'
                                 }`}
                             >
-                                <Icon size={16} />
+                                <Icon size={16} className="w-5" />
                                 <span className="flex-1">{label}</span>
                                 {badge > 0 && (
                                     <span className="bg-red-500 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
@@ -61,17 +72,28 @@ export default function AdminSidebar({
                 </nav>
             </div>
 
-            <div className="p-6 border-t border-slate-800 bg-slate-950/30">
-                <p className="text-xs text-slate-500 font-medium truncate mb-3">
-                    {user?.fullName || 'Authorized User'}
-                </p>
-                <button
-                    onClick={onLogout}
-                    className="w-full flex items-center gap-2 text-slate-400 hover:text-red-400 text-sm font-semibold transition-colors"
-                >
-                    <LogOut size={16} />
-                    Sign Out
-                </button>
+            {/* User profile / footer */}
+            <div className="p-4 border-t border-gray-100">
+                <div className="flex items-center space-x-3 p-2 rounded-lg bg-orange-50/60 border border-orange-100">
+                    <div className="w-9 h-9 rounded-full bg-brand-orange text-white flex items-center justify-center font-bold border border-brand-orange-hover shrink-0">
+                        {initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate">
+                            {user?.fullName || 'Authorized User'}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                            {user?.isAdmin ? 'Store Owner (SuperAdmin)' : (user?.role || 'Staff')}
+                        </p>
+                    </div>
+                    <button
+                        title="Logout"
+                        onClick={onLogout}
+                        className="text-gray-400 hover:text-brand-orange transition shrink-0"
+                    >
+                        <LogOut size={16} />
+                    </button>
+                </div>
             </div>
         </aside>
     );
