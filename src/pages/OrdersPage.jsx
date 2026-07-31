@@ -6,9 +6,8 @@ import {
   Receipt,
   Clock,
   Eye,
-  RotateCcw,
   X,
-  UtensilsCrossed,
+  ShoppingBag,
   ChevronLeft,
   ChevronRight,
   UserCircle2,
@@ -23,21 +22,19 @@ import API from "../api/axios";
 const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/api\/?$/, "");
 
 const STATUS_STYLE = {
-  pending:   "bg-amber-100 text-amber-700",
-  serving:   "bg-blue-100 text-blue-700",
-  completed: "bg-green-100 text-green-700",
-  cancelled: "bg-red-100 text-red-700",
+  unpaid: "bg-amber-100 text-amber-700",
+  partial: "bg-blue-100 text-blue-700",
+  paid: "bg-green-100 text-green-700",
+  voided: "bg-red-100 text-red-700",
 };
-const STATUS_LABEL = { pending: "Pending", serving: "Serving", completed: "Delivered", cancelled: "Cancelled" };
-
-const REORDER_KEY = "reorder_cart";
+const STATUS_LABEL = { unpaid: "Unpaid", partial: "Partially Paid", paid: "Paid", voided: "Voided" };
 
 function ItemImage({ src, alt }) {
   const [broken, setBroken] = useState(false);
   if (!src || broken) {
     return (
       <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-50 to-stone-100 border border-stone-200 flex items-center justify-center shrink-0">
-        <UtensilsCrossed size={16} className="text-orange-300" />
+        <ShoppingBag size={16} className="text-orange-300" />
       </div>
     );
   }
@@ -55,89 +52,61 @@ export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState([]);
+  const [receipts, setReceipts] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [cancelTarget, setCancelTarget] = useState(null);
   const [viewing, setViewing] = useState(null);
-  const [menuImages, setMenuImages] = useState({});
+  const [catalogImages, setCatalogImages] = useState({});
 
-  const loadMenuImages = () => {
-    API.get("/menu")
+  const loadCatalogImages = () => {
+    API.get("/customer/catalog")
       .then((res) => {
         const map = {};
-        res.data.forEach((m) => { map[m.name.toLowerCase()] = m.imageUrl; });
-        setMenuImages(map);
+        res.data.forEach((p) => { map[p.name.toLowerCase()] = p.imageUrl; });
+        setCatalogImages(map);
       })
       .catch(() => {});
   };
 
-  const loadOrders = (targetPage = page) => {
+  const loadBills = (targetPage = page) => {
     if (!user) return;
     setLoading(true);
-    API.get("/orders/customer", { params: { page: targetPage, limit: 10 } })
+    API.get("/wallet/history", { params: { page: targetPage, limit: 10 } })
       .then((res) => {
-        setOrders(res.data.orders);
+        setReceipts(res.data.receipts);
         setPage(res.data.page);
         setTotalPages(res.data.totalPages);
       })
-      .catch(() => toast.error("Couldn't load your orders"))
+      .catch(() => toast.error("Couldn't load your bills"))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     if (!user) return;
-    loadMenuImages();
-    loadOrders(1);
+    loadCatalogImages();
+    loadBills(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Live-refresh when a bill of ours changes (paid, partially paid, etc.)
   useEffect(() => {
     if (!user) return;
     const socket = io(SOCKET_URL);
-    // Fired when the order is first placed (still awaiting a waiter)
-    socket.on("onlineOrder:new", (payload) => {
-      if (String(payload.order?.customer) === String(user.id)) loadOrders(1);
+    socket.on("receipt:paid", (receipt) => {
+      if (String(receipt.customer) === String(user.id)) loadBills(page);
     });
-    // Fired on every later status change: pending -> serving -> completed/cancelled
-    socket.on("order:updated", (order) => {
-      if (String(order.customer) === String(user.id)) {
-        setOrders((prev) => prev.map((o) => (o._id === order._id ? { ...o, status: order.status } : o)));
-      }
+    socket.on("receipt:updated", (receipt) => {
+      if (String(receipt.customer) === String(user.id)) loadBills(page);
     });
     return () => socket.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, page]);
 
-  const handleConfirmCancel = async () => {
-    if (!cancelTarget) return;
-    try {
-      await API.patch(`/orders/customer/${cancelTarget}/cancel`);
-      setOrders((prev) => prev.map((o) => (o._id === cancelTarget ? { ...o, status: "cancelled" } : o)));
-      toast.success("Order cancelled");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Couldn't cancel order");
-    } finally {
-      setCancelTarget(null);
-    }
-  };
-
-  const handleReorder = (order) => {
-    const cart = order.items.map((i) => ({
-      name: i.mealName,
-      price: i.unitPrice,
-      qty: i.quantity,
-    }));
-    localStorage.setItem(REORDER_KEY, JSON.stringify(cart));
-    toast.success("Cart pre-filled from this order");
-    navigate("/home");
-  };
-
-  const itemsWithImages = (order) =>
-    (order?.items || []).map((i) => ({
+  const itemsWithImages = (receipt) =>
+    (receipt?.items || []).map((i) => ({
       ...i,
-      imageUrl: menuImages[i.mealName?.toLowerCase()] || null,
+      imageUrl: i.imageUrl || catalogImages[i.productName?.toLowerCase()] || null,
     }));
 
   if (authLoading) {
@@ -156,7 +125,7 @@ export default function OrdersPage() {
         </div>
         <h1 className="text-xl font-black text-stone-900 mb-2">Account Required</h1>
         <p className="text-stone-500 text-sm mb-8 max-w-xs">
-          Sign in to place orders and view your order history.
+          Sign in to view your bills and payment history.
         </p>
         <div className="w-full max-w-xs space-y-3">
           <Link
@@ -185,61 +154,45 @@ export default function OrdersPage() {
     <div className="min-h-screen bg-stone-50 pb-24">
       <header className="bg-white border-b border-stone-200 sticky top-0 z-30 px-5 py-4">
         <h1 className="text-lg font-black text-stone-900 flex items-center gap-2">
-          <Receipt size={20} className="text-orange-500" /> Your Orders
+          <Receipt size={20} className="text-orange-500" /> Your Bills
         </h1>
       </header>
 
       <div className="max-w-2xl mx-auto px-5 mt-5">
         {loading && <p className="text-stone-400 text-sm">Loading…</p>}
-        {!loading && orders.length === 0 && (
+        {!loading && receipts.length === 0 && (
           <div className="bg-white rounded-xl border border-stone-200 p-8 text-center">
             <Clock size={28} className="text-orange-300 mx-auto mb-2" />
-            <p className="text-stone-400 text-sm">No orders yet.</p>
+            <p className="text-stone-400 text-sm">No bills yet.</p>
           </div>
         )}
 
         <div className="bg-white rounded-xl border border-stone-200 divide-y divide-stone-100">
-          {orders.map((o) => (
-            <div key={o._id} className="p-4 flex items-center justify-between text-sm gap-3">
+          {receipts.map((r) => (
+            <div key={r._id} className="p-4 flex items-center justify-between text-sm gap-3">
               <div className="min-w-0">
-                <p className="font-bold text-stone-900">{o.billId || `Order #${o._id.slice(-6)}`}</p>
-                <p className="text-xs text-stone-400">{new Date(o.createdAt).toLocaleString()}</p>
-                <div className="flex items-center gap-3 mt-2">
-                  <button
-                    onClick={() => setViewing(o)}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-stone-500 hover:text-orange-500"
-                  >
-                    <Eye size={13} /> View
-                  </button>
-                  <button
-                    onClick={() => handleReorder(o)}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700"
-                  >
-                    <RotateCcw size={13} /> Reorder
-                  </button>
-                </div>
+                <p className="font-bold text-stone-900">{r.billId}</p>
+                <p className="text-xs text-stone-400">{r.branch?.name} · {new Date(r.createdAt).toLocaleString()}</p>
+                <button
+                  onClick={() => setViewing(r)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-stone-500 hover:text-orange-500 mt-2"
+                >
+                  <Eye size={13} /> View Items
+                </button>
               </div>
               <div className="text-right space-y-1 shrink-0">
-                <p className="font-bold text-stone-900">KSh {Number(o.subtotal).toLocaleString()}</p>
-                <span className={`text-xs px-3 py-1 rounded-full font-semibold ${STATUS_STYLE[o.status] || "bg-stone-100 text-stone-600"}`}>
-                  {STATUS_LABEL[o.status] || o.status}
+                <p className="font-bold text-stone-900">KSh {Number(r.subtotal).toLocaleString()}</p>
+                <span className={`text-xs px-3 py-1 rounded-full font-semibold ${STATUS_STYLE[r.status] || "bg-stone-100 text-stone-600"}`}>
+                  {STATUS_LABEL[r.status] || r.status}
                 </span>
-                {o.status === "pending" && (
-                  <button
-                    onClick={() => setCancelTarget(o._id)}
-                    className="block text-xs text-red-600 font-semibold ml-auto"
-                  >
-                    Cancel
-                  </button>
-                )}
-                {o.status === "completed" && o.billHasPendingPayment && (
+                {r.pendingManualPayments?.length > 0 && (
                   <span className="block text-[11px] text-amber-600 font-semibold ml-auto">
                     Payment pending confirmation
                   </span>
                 )}
-                {o.status === "completed" && !o.billHasPendingPayment && o.billStatus && o.billStatus !== "paid" && (
+                {["unpaid", "partial"].includes(r.status) && !r.pendingManualPayments?.length && (
                   <button
-                    onClick={() => navigate(`/wallet?bill=${encodeURIComponent(o.billId)}`)}
+                    onClick={() => navigate(`/wallet?bill=${encodeURIComponent(r.billId)}`)}
                     className="inline-flex items-center gap-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg ml-auto transition-colors"
                   >
                     <Wallet size={12} /> Pay
@@ -253,7 +206,7 @@ export default function OrdersPage() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between pt-4 mt-2">
             <button
-              onClick={() => loadOrders(Math.max(1, page - 1))}
+              onClick={() => loadBills(Math.max(1, page - 1))}
               disabled={page <= 1}
               className="flex items-center gap-1 text-xs font-bold text-stone-500 disabled:opacity-30"
             >
@@ -261,7 +214,7 @@ export default function OrdersPage() {
             </button>
             <span className="text-xs font-semibold text-stone-500">Page {page} of {totalPages}</span>
             <button
-              onClick={() => loadOrders(Math.min(totalPages, page + 1))}
+              onClick={() => loadBills(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages}
               className="flex items-center gap-1 text-xs font-bold text-stone-500 disabled:opacity-30"
             >
@@ -271,14 +224,14 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* View order modal — items with images */}
+      {/* View bill modal — items with images */}
       {viewing && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-stone-100 p-4 flex items-center justify-between">
               <div>
-                <h3 className="font-black text-stone-900">{viewing.billId || `Order #${viewing._id.slice(-6)}`}</h3>
-                <p className="text-xs text-stone-400">{new Date(viewing.createdAt).toLocaleString()}</p>
+                <h3 className="font-black text-stone-900">{viewing.billId}</h3>
+                <p className="text-xs text-stone-400">{viewing.branch?.name} · {new Date(viewing.createdAt).toLocaleString()}</p>
               </div>
               <button onClick={() => setViewing(null)} className="text-stone-400 hover:text-stone-700">
                 <X size={20} />
@@ -287,9 +240,9 @@ export default function OrdersPage() {
             <div className="p-4 space-y-3">
               {itemsWithImages(viewing).map((it, idx) => (
                 <div key={idx} className="flex items-center gap-3">
-                  <ItemImage src={it.imageUrl} alt={it.mealName} />
+                  <ItemImage src={it.imageUrl} alt={it.productName} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-stone-800 truncate">{it.mealName}</p>
+                    <p className="text-sm font-semibold text-stone-800 truncate">{it.productName}</p>
                     <p className="text-xs text-stone-400">Qty {it.quantity} × KSh {Number(it.unitPrice).toLocaleString()}</p>
                   </div>
                   <p className="text-sm font-bold text-stone-900">KSh {Number(it.lineTotal).toLocaleString()}</p>
@@ -299,29 +252,14 @@ export default function OrdersPage() {
                 <span>Total</span>
                 <span>KSh {Number(viewing.subtotal).toLocaleString()}</span>
               </div>
-              <button
-                onClick={() => { setViewing(null); handleReorder(viewing); }}
-                className="w-full mt-2 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition-colors"
-              >
-                <RotateCcw size={16} /> Reorder This
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {cancelTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center">
-            <h3 className="text-lg font-bold text-stone-900 mb-2">Cancel Order?</h3>
-            <p className="text-sm text-stone-500 mb-5">This action cannot be undone.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setCancelTarget(null)} className="flex-1 border border-stone-300 rounded-lg py-2 font-semibold">
-                No
-              </button>
-              <button onClick={handleConfirmCancel} className="flex-1 bg-red-600 text-white rounded-lg py-2 font-semibold">
-                Yes, Cancel
-              </button>
+              {["unpaid", "partial"].includes(viewing.status) && (
+                <button
+                  onClick={() => { setViewing(null); navigate(`/wallet?bill=${encodeURIComponent(viewing.billId)}`); }}
+                  className="w-full mt-2 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition-colors"
+                >
+                  <Wallet size={16} /> Pay This Bill
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -330,4 +268,4 @@ export default function OrdersPage() {
       <BottomNav />
     </div>
   );
-  }
+}
