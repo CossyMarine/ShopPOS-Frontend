@@ -3,57 +3,56 @@ import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { toast } from 'react-toastify';
 import { useAuth } from '../hooks/useAuth';
+import { BranchProvider, useBranch } from '../context/BranchContext';
 import API from '../api/axios';
-import AdminSidebar from '../components/Admin/AdminSidebar';
+import AdminSidebar, { ADMIN_NAV_ITEMS } from '../components/Admin/AdminSidebar';
+import BranchSelector from '../components/Admin/BranchSelector';
 import DashboardOverview from '../components/Admin/DashboardOverview';
-import MenuManagement from '../components/Admin/MenuManagement';
+import ProductManagement from '../components/Storekeeper/ProductManagement';
 import OrdersLedger from '../components/Admin/OrdersLedger';
 import PaymentsView from '../components/Admin/PaymentsView';
 import VoidRequestsView from '../components/Admin/VoidRequestsView';
-import UsersManagement from '../components/Admin/UsersManagement';
+import StaffManagement from '../components/Admin/StaffManagement';
+import BranchesManagement from '../components/Admin/BranchesManagement';
 import SettingsManagement from '../components/Admin/SettingsManagement';
-import WaiterManagement from '../components/Admin/WaiterManagement';
-import KitchenManagement from '../components/Admin/KitchenManagement';
-import InventoryManagement from '../components/Admin/InventoryManagement';
-import AccountantManagement from '../components/Admin/AccountantManagement';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 const VIEWS = {
     dashboard: DashboardOverview,
-    menu: MenuManagement,
-    kitchen: KitchenManagement,
-    inventory: InventoryManagement,
+    products: ProductManagement,
     orders: OrdersLedger,
     payments: PaymentsView,
     voids: VoidRequestsView,
-    users: UsersManagement,
-    waiters: WaiterManagement,
-    accountants: AccountantManagement,
+    staff: StaffManagement,
+    branches: BranchesManagement,
     settings: SettingsManagement,
 };
 
-export default function Admin() {
+function AdminInner() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const { selectedBranch } = useBranch();
     const [activeView, setActiveView] = useState('dashboard');
     const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
     const activeViewRef = useRef(activeView);
     activeViewRef.current = activeView;
 
     const fetchPendingCount = useCallback(() => {
-        API.get('/payments/pending/count')
+        const params = selectedBranch ? { branch: selectedBranch } : {};
+        API.get('/payments/pending/count', { params })
             .then((res) => setPendingPaymentsCount(res.data.count || 0))
             .catch(() => {});
-    }, []);
+    }, [selectedBranch]);
 
     useEffect(() => {
         fetchPendingCount();
     }, [fetchPendingCount]);
 
-    // Sidebar-wide toast + badge — fires no matter which admin view is open
     useEffect(() => {
         const socket = io(SOCKET_URL);
+        if (selectedBranch) socket.emit('join_room', `branch:${selectedBranch}`);
+
         socket.on('receipt:manualPending', (payload) => {
             fetchPendingCount();
             if (activeViewRef.current !== 'payments') {
@@ -67,12 +66,16 @@ export default function Admin() {
         });
         socket.on('receipt:manualPaymentResolved', () => fetchPendingCount());
         return () => socket.disconnect();
-    }, [fetchPendingCount]);
+    }, [fetchPendingCount, selectedBranch]);
 
     const handleLogout = async () => {
         await logout();
         navigate('/login');
     };
+
+    const navItems = user?.isAdmin
+        ? ADMIN_NAV_ITEMS
+        : ADMIN_NAV_ITEMS.filter((item) => item.id !== 'branches');
 
     const ActiveComponent = VIEWS[activeView] || DashboardOverview;
 
@@ -84,10 +87,21 @@ export default function Admin() {
                 user={user}
                 onLogout={handleLogout}
                 pendingPaymentsCount={pendingPaymentsCount}
+                navItems={navItems}
+                title={user?.isAdmin ? 'Super Admin' : 'Branch Manager'}
+                extra={<BranchSelector />}
             />
             <main className="flex-1 p-8 overflow-y-auto h-screen">
-                <ActiveComponent onPendingChange={fetchPendingCount} />
+                <ActiveComponent onPendingChange={fetchPendingCount} branch={selectedBranch} />
             </main>
         </div>
+    );
+}
+
+export default function Admin() {
+    return (
+        <BranchProvider>
+            <AdminInner />
+        </BranchProvider>
     );
 }
