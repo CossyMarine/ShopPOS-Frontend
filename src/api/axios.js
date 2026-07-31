@@ -3,7 +3,7 @@ import axios from "axios";
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "https://shoppos-backend.onrender.com/api",
-  timeout: 10000,
+  timeout: 15000,
   withCredentials: true, // send/receive the httpOnly auth cookie
 });
 
