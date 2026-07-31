@@ -1,8 +1,8 @@
 import { NavLink } from "react-router-dom";
-import { UtensilsCrossed, Receipt, Wallet, User } from "lucide-react";
+import { Store, Receipt, Wallet, User } from "lucide-react";
 
 const tabs = [
-  { to: "/home", label: "Menu", icon: UtensilsCrossed },
+  { to: "/home", label: "Shop", icon: Store },
   { to: "/orders", label: "Orders", icon: Receipt },
   { to: "/wallet", label: "Wallet", icon: Wallet },
   { to: "/profile", label: "Profile", icon: User },
