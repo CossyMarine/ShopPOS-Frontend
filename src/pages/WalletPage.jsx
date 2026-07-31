@@ -417,9 +417,9 @@ export default function WalletPage() {
               <div className="space-y-2">
                 {activeBill.items.map((it, idx) => (
                   <div key={idx} className="flex items-center gap-3">
-                    <BillItemImage src={it.imageUrl} alt={it.mealName} />
+                    <BillItemImage src={it.imageUrl} alt={it.productName} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-stone-800 truncate">{it.mealName}</p>
+                      <p className="text-sm font-semibold text-stone-800 truncate">{it.productName}</p>
                       <p className="text-xs text-stone-400">Qty {it.quantity} × KSh {Number(it.unitPrice).toLocaleString()}</p>
                     </div>
                     <p className="text-sm font-bold text-stone-900">KSh {Number(it.lineTotal).toLocaleString()}</p>
