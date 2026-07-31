@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://restopos-backend-fj8n.onrender.com/api/$1"
+      "destination": "https://shoppos-backend.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",
