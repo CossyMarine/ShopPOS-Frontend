@@ -14,7 +14,7 @@ import ComboPayModal from './ComboPayModal';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
-export default function OrdersLedger() {
+export default function OrdersLedger({ branch } = {}) {
     const [tab, setTab] = useState('unpaid');
     const [unpaid, setUnpaid] = useState([]);
     const [paidList, setPaidList] = useState([]);
@@ -22,10 +22,8 @@ export default function OrdersLedger() {
     const [viewing, setViewing] = useState(null);
     const [paying, setPaying] = useState(null); // receipt selected for ComboPayModal
 
-    // ---- Pending online orders (unclaimed) ----
+    // Online bills — no claiming step needed, any cashier at the branch can act on them
     const [pendingOnline, setPendingOnline] = useState([]);
-    const [waiters, setWaiters] = useState([]);
-    const [claimBusy, setClaimBusy] = useState(false);
 
     // ---- "All" tab: paginated history, search, date filter, today summary ----
     const [allReceipts, setAllReceipts] = useState([]);
@@ -38,13 +36,15 @@ export default function OrdersLedger() {
     const [dateTo, setDateTo] = useState('');
     const [summary, setSummary] = useState({ paidToday: 0, paidTodayCount: 0, unpaidToday: 0, unpaidTodayCount: 0 });
 
+    const branchParams = branch ? { branch } : {};
+
     // ---- Quick lists (unpaid/paid tabs + tab counts) ----
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             const [unpaidRes, paidRes] = await Promise.all([
-                API.get('/receipts'),
-                API.get('/receipts/paid'),
+                API.get('/receipts', { params: branchParams }),
+                API.get('/receipts/paid', { params: branchParams }),
             ]);
             setUnpaid(unpaidRes.data);
             setPaidList(paidRes.data);
@@ -53,31 +53,33 @@ export default function OrdersLedger() {
             toast.error('Failed to load receipts');
         }
         setLoading(false);
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch]);
 
     const fetchSummary = useCallback(async () => {
         try {
-            const res = await API.get('/receipts/summary/today');
+            const res = await API.get('/receipts/summary/today', { params: branchParams });
             setSummary(res.data);
         } catch (err) {
             console.error('Failed to fetch summary', err);
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch]);
 
-    // ---- Pending online orders (not yet claimed by a waiter) ----
     const fetchPendingOnline = useCallback(async () => {
         try {
-            const res = await API.get('/receipts/online-pending');
+            const res = await API.get('/receipts/online-pending', { params: branchParams });
             setPendingOnline(res.data);
         } catch (err) {
-            console.error('Failed to fetch pending online orders', err);
+            console.error('Failed to fetch pending online bills', err);
         }
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch]);
 
     const fetchAllReceipts = useCallback(async (page = 1) => {
         setAllLoading(true);
         try {
-            const params = { page, limit: 10, q: search || undefined };
+            const params = { page, limit: 10, q: search || undefined, ...branchParams };
             if (dateFrom) params.from = new Date(dateFrom).toISOString();
             if (dateTo) params.to = new Date(dateTo).toISOString();
             const res = await API.get('/receipts/history', { params });
@@ -90,19 +92,16 @@ export default function OrdersLedger() {
             toast.error('Failed to load bill history');
         }
         setAllLoading(false);
-    }, [search, dateFrom, dateTo]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search, dateFrom, dateTo, branch]);
 
-    // Load unpaid, paid, pending-online, AND the "all" count/list up front —
-    // so every tab badge is accurate the moment the page mounts, not just
-    // after it's clicked.
     useEffect(() => {
         fetchData();
         fetchSummary();
         fetchPendingOnline();
         fetchAllReceipts(1);
-        API.get('/auth/waiters').then((res) => setWaiters(res.data)).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fetchData, fetchSummary, fetchPendingOnline]);
+    }, [fetchData, fetchSummary, fetchPendingOnline, branch]);
 
     useEffect(() => {
         if (tab !== 'all') return;
@@ -113,48 +112,22 @@ export default function OrdersLedger() {
 
     useEffect(() => {
         const socket = io(SOCKET_URL);
-        socket.on('receipt:paid', () => {
+        if (branch) socket.emit('join_room', `branch:${branch}`);
+
+        socket.on('receipt:paid', () => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); });
+        socket.on('receipt:updated', () => { fetchData(); fetchPendingOnline(); fetchAllReceipts(allPage); });
+        socket.on('sale:created', ({ order } = {}) => {
             fetchData();
             fetchSummary();
             fetchAllReceipts(allPage);
-        });
-        socket.on('receipt:updated', () => {
-            fetchData();
-            fetchPendingOnline();
-            fetchAllReceipts(allPage);
-        });
-        socket.on('order:created', ({ source } = {}) => {
-            fetchData();
-            fetchSummary();
-            fetchAllReceipts(allPage);
-            if (source === 'online') {
+            if (order?.source === 'online') {
                 fetchPendingOnline();
-                toast.info('🔔 New online order awaiting a waiter');
+                toast.info('🔔 New online bill from the Customer Portal');
             }
-        });
-        socket.on('order:updated', () => {
-            fetchPendingOnline();
-            fetchData();
         });
         return () => socket.disconnect();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // ---- Claim an online order on behalf of a waiter ----
-    const handleClaimOnlineOrder = async (receipt, waiterName) => {
-        if (!waiterName) return;
-        setClaimBusy(true);
-        try {
-            await API.patch(`/orders/${receipt.order}/assign`, { waiterName });
-            setPendingOnline((prev) => prev.filter((r) => r._id !== receipt._id));
-            toast.success(`Assigned to ${waiterName}`);
-            fetchData();
-        } catch (err) {
-            console.error('Failed to assign waiter', err);
-            toast.error(err.response?.data?.message || 'Failed to assign waiter');
-        }
-        setClaimBusy(false);
-    };
+    }, [branch]);
 
     const balanceDue = (r) => Number((r.subtotal - (r.amountPaid || 0)).toFixed(2));
 
@@ -190,7 +163,7 @@ export default function OrdersLedger() {
         <div className="space-y-8 bg-gray-50 text-gray-800">
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-black text-gray-800">Orders & Receipts</h2>
+                    <h2 className="text-2xl font-black text-gray-800">Sales & Receipts</h2>
                     <p className="text-sm text-gray-500">Track unpaid bills and payment history</p>
                 </div>
                 <button
@@ -239,17 +212,14 @@ export default function OrdersLedger() {
                 allTotalPages={allTotalPages}
                 allTotal={allTotal}
                 fetchAllReceipts={fetchAllReceipts}
-                waiters={waiters}
-                claimBusy={claimBusy}
-                onClaim={handleClaimOnlineOrder}
             />
 
             <ViewItemsModal
                 open={!!viewing}
                 onClose={() => setViewing(null)}
                 title={viewing?.billId}
-                subtitle={viewing ? `Table ${viewing.tableNumber} · ${viewing.waiterName || 'No waiter'}` : ''}
-                items={(viewing?.items || []).map((i) => ({ name: i.mealName, qty: i.quantity, price: i.unitPrice }))}
+                subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
+                items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
                 total={viewing?.subtotal}
                 payment={viewing ? paymentInfo(viewing) : null}
             />
