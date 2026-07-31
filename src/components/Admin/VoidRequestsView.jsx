@@ -6,7 +6,7 @@ import ConfirmModal from './ConfirmModal';
 import ViewItemsModal from './ViewItemsModal';
 import { formatKenyanDateTime } from '../../utils/formatDate';
 
-export default function VoidRequestsView() {
+export default function VoidRequestsView({ branch } = {}) {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(false);
     const [viewing, setViewing] = useState(null);
@@ -16,7 +16,7 @@ export default function VoidRequestsView() {
     const fetchRequests = async () => {
         setLoading(true);
         try {
-            const res = await API.get('/void-requests');
+            const res = await API.get('/void-requests', { params: branch ? { branch } : {} });
             setRequests(res.data);
         } catch (err) {
             console.error('Failed to fetch void requests', err);
@@ -27,14 +27,15 @@ export default function VoidRequestsView() {
 
     useEffect(() => {
         fetchRequests();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch]);
 
     const runAction = async () => {
         const { request, action } = pendingAction;
         setWorking(true);
         try {
             await API.patch(`/void-requests/${request._id}/${action}`);
-            toast.success(action === 'approve' ? 'Void approved — receipt voided' : 'Void request rejected');
+            toast.success(action === 'approve' ? 'Void approved — receipt voided and stock restored' : 'Void request rejected');
             setPendingAction(null);
             fetchRequests();
         } catch (err) {
@@ -66,7 +67,7 @@ export default function VoidRequestsView() {
                         <thead>
                             <tr className="text-gray-400 font-semibold border-b border-gray-100">
                                 <th className="p-3">Bill ID</th>
-                                <th className="p-3">Table</th>
+                                <th className="p-3">Branch</th>
                                 <th className="p-3">Requested By</th>
                                 <th className="p-3">Date</th>
                                 <th className="p-3">Reason</th>
@@ -84,7 +85,7 @@ export default function VoidRequestsView() {
                                 requests.map((v) => (
                                     <tr key={v._id} className="hover:bg-gray-50/70 transition-colors">
                                         <td className="p-3 font-bold text-orange-500">{v.receipt?.billId}</td>
-                                        <td className="p-3 font-semibold text-gray-800">Table {v.receipt?.tableNumber}</td>
+                                        <td className="p-3 font-semibold text-gray-800">{v.receipt?.branch?.name || '—'}</td>
                                         <td className="p-3 font-medium">{v.requestedBy?.fullName || '—'}</td>
                                         <td className="p-3 text-xs text-gray-400">
                                             {formatKenyanDateTime(v.createdAt)}
@@ -124,8 +125,8 @@ export default function VoidRequestsView() {
                 open={!!viewing}
                 onClose={() => setViewing(null)}
                 title={viewing?.billId}
-                subtitle={viewing ? `Table ${viewing.tableNumber}` : ''}
-                items={(viewing?.items || []).map((i) => ({ name: i.mealName, qty: i.quantity, price: i.unitPrice }))}
+                subtitle={viewing ? `${viewing.branch?.name || ''}` : ''}
+                items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
                 total={viewing?.subtotal}
             />
 
@@ -134,7 +135,7 @@ export default function VoidRequestsView() {
                 title={pendingAction?.action === 'approve' ? 'Approve void?' : 'Reject void request?'}
                 description={
                     pendingAction?.action === 'approve'
-                        ? `This permanently voids receipt ${pendingAction?.request?.receipt?.billId}. Revenue for this bill will no longer count.`
+                        ? `This permanently voids receipt ${pendingAction?.request?.receipt?.billId} and restocks its items back into inventory. Revenue for this bill will no longer count.`
                         : `The receipt stays active and returns to the ledger.`
                 }
                 confirmLabel={pendingAction?.action === 'approve' ? 'Approve & Void' : 'Reject'}
@@ -145,4 +146,4 @@ export default function VoidRequestsView() {
             />
         </div>
     );
-        }
+                                        }
