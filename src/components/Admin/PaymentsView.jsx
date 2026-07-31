@@ -285,9 +285,9 @@ export default function PaymentsView({ onPendingChange }) {
                                         transactions.map((t) => (
                                             <tr key={`${t.receiptId}-${t.paymentId}`} className="hover:bg-gray-50/70 transition-colors">
                                                 <td className="p-3 font-bold text-orange-500">{t.billId}</td>
-                                                <td className="p-3 font-semibold text-gray-800">Table {t.tableNumber}</td>
+                                                <td className="p-3 font-semibold text-gray-800">Table {t.branch?.name}</td>
                                                 <td className="p-3"><MethodPill method={t.method} /></td>
-                                                <td className="p-3 font-medium">{t.payerName || t.waiterName || 'Walk-in'}</td>
+                                                <td className="p-3 font-medium">{t.payerName || t.cashierName || 'Walk-in'}</td>
                                                 <td className="p-3 text-xs text-gray-500">{t.reference || '—'}</td>
                                                 <td className="p-3 text-right font-bold text-gray-800">KES {Number(t.amount).toLocaleString()}</td>
                                                 <td className="p-3 text-xs text-gray-400">{new Date(t.paidAt).toLocaleString()}</td>
@@ -356,7 +356,7 @@ export default function PaymentsView({ onPendingChange }) {
                                     {pending.map((p) => (
                                         <tr key={p.paymentId} className="bg-amber-50/40 hover:bg-amber-50/70 transition-colors">
                                             <td className="p-3 font-bold text-orange-500">{p.billId}</td>
-                                            <td className="p-3 font-semibold text-gray-800">Table {p.tableNumber}</td>
+                                            <td className="p-3 font-semibold text-gray-800">{p.branch?.name}</td>
                                             <td className="p-3 font-medium">{p.paidByName}</td>
                                             <td className="p-3 text-xs text-gray-500">{p.reference}</td>
                                             <td className="p-3 text-right font-bold text-gray-800">KES {Number(p.amount).toLocaleString()}</td>
