@@ -9,14 +9,14 @@ export default function PrintReceipt({ receipt }) {
         <div id="print-receipt" className="hidden print:block font-mono text-black bg-white p-4 w-72 text-sm">
             <div className="text-center mb-2">
                 <p>=====================================</p>
-                <p className="font-bold">CossyMarine Hotel</p>
+                <p className="font-bold">Babylon Supermarket</p>
+                <p>{receipt.branch?.name || ''}</p>
                 <p>SALES RECEIPT</p>
                 <p>=====================================</p>
             </div>
 
             <p>Receipt No : {receipt.billId}</p>
-            <p>Table      : {receipt.tableNumber}</p>
-            <p>Waiter     : {receipt.waiterName}</p>
+            <p>Cashier    : {receipt.cashierName}</p>
             <p>Date       : {dateStr}</p>
             <p>Time       : {timeStr}</p>
 
@@ -26,7 +26,7 @@ export default function PrintReceipt({ receipt }) {
 
             {receipt.items?.map((item, i) => (
                 <p key={i}>
-                    {item.mealName.padEnd(18).slice(0, 18)}
+                    {item.productName.padEnd(18).slice(0, 18)}
                     {String(item.quantity).padStart(3)}
                     {String(item.unitPrice).padStart(7)}
                     {String(item.lineTotal).padStart(7)}
@@ -41,6 +41,9 @@ export default function PrintReceipt({ receipt }) {
                     <p>Change                   KES {receipt.changeGiven}</p>
                     <p>Payment: {receipt.paymentMethod}</p>
                 </>
+            )}
+            {receipt.rewardPointsEarned > 0 && (
+                <p>Points Earned            {receipt.rewardPointsEarned}</p>
             )}
             <div className="text-center mt-2">
                 <p>=====================================</p>
