@@ -15,7 +15,6 @@ import {
   UserPlus,
   LogIn,
   LayoutDashboard,
-  ChefHat,
   Award,
   Coins,
   Sparkles,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { useAuth } from "../hooks/useAuth";
+import { routeForUser } from "../utils/routeForUser";
 import API from "../api/axios";
 
 function initials(name = "") {
@@ -44,18 +44,26 @@ function formatJoinDate(dateStr) {
   });
 }
 
+const STAFF_ROLE_LABEL = {
+  branchManager: "Branch Manager",
+  cashier: "Cashier",
+  storekeeper: "Storekeeper",
+};
+
 export default function ProfilePage() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const [wallet, setWallet] = useState(null);
   const [callNumber, setCallNumber] = useState(null);
 
+  const isStaff = !!user && (user.isAdmin || (user.role && user.role !== "customer"));
+
   useEffect(() => {
-    if (!user || user.role === "waiter" || user.isStaff) return;
+    if (!user || isStaff) return;
     API.get("/wallet/me")
       .then((res) => setWallet(res.data))
       .catch(() => {});
-  }, [user]);
+  }, [user, isStaff]);
 
   useEffect(() => {
     API.get("/settings/public")
@@ -66,7 +74,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center text-stone-400 font-semibold text-sm">
-        Syncing system profiles…
+        Syncing your profile…
       </div>
     );
   }
@@ -80,7 +88,7 @@ export default function ProfilePage() {
         </div>
         <h1 className="text-xl font-black text-stone-900 mb-2">Account Required</h1>
         <p className="text-stone-500 text-sm mb-8 max-w-xs">
-          Sign in to access order terminals, view your dashboard logs, or track historical customer table sessions.
+          Sign in to track your orders, pay bills from your wallet, and earn loyalty points.
         </p>
 
         <div className="w-full max-w-xs space-y-3">
@@ -109,7 +117,6 @@ export default function ProfilePage() {
 
   // ---------- Logged-in view ----------
   const joined = formatJoinDate(user.createdAt);
-  const isWaiter = user.role?.toLowerCase() === "waiter" || user.isStaff;
   const missingEmail = !user.email;
   const missingPhone = !user.phone;
 
@@ -117,19 +124,21 @@ export default function ProfilePage() {
   const targetPoints = wallet?.targetPoints || 500;
   const progressPercent = Math.min((loyaltyPoints / targetPoints) * 100, 100);
 
+  const staffLabel = user.isAdmin ? "Super Admin" : STAFF_ROLE_LABEL[user.role] || "Staff";
+
   const options = [
-    ...(isWaiter
+    ...(isStaff
       ? [{
           icon: LayoutDashboard,
-          title: "POS Waiter Dashboard",
-          subtitle: "Launch primary table order management workspace",
-          onClick: () => navigate("/waiter-dashboard"),
+          title: "POS Dashboard",
+          subtitle: `Open your ${staffLabel} workspace`,
+          onClick: () => navigate(routeForUser(user)),
         }]
       : [
           {
             icon: Receipt,
             title: "My Order History",
-            subtitle: "Track live status updates and historical receipts",
+            subtitle: "Track live status updates and past receipts",
             onClick: () => navigate("/orders"),
           },
           {
@@ -156,7 +165,7 @@ export default function ProfilePage() {
       : [{
           icon: PhoneCall,
           title: "Help & Support Desk",
-          subtitle: "Review system documentation or call support channels",
+          subtitle: "Review help topics or reach support",
           onClick: () => navigate("/profile/support"),
         }]
     ),
@@ -168,13 +177,13 @@ export default function ProfilePage() {
 
         {/* HERO CARD */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-8 text-center relative overflow-hidden">
-          <div className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${isWaiter ? 'from-stone-900 to-stone-700' : 'from-orange-500 to-orange-400'}`} />
+          <div className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${isStaff ? 'from-stone-900 to-stone-700' : 'from-orange-500 to-orange-400'}`} />
 
           <div className="relative w-24 h-24 mx-auto mb-4">
-            <div className={`w-24 h-24 border-4 border-white rounded-full flex items-center justify-center text-3xl font-black shadow-md ${isWaiter ? 'bg-stone-100 text-stone-800' : 'bg-orange-50 text-orange-500'}`}>
+            <div className={`w-24 h-24 border-4 border-white rounded-full flex items-center justify-center text-3xl font-black shadow-md ${isStaff ? 'bg-stone-100 text-stone-800' : 'bg-orange-50 text-orange-500'}`}>
               {initials(user.fullName)}
             </div>
-            <button className={`absolute bottom-0 right-0 text-white w-8 h-8 rounded-full border-2 border-white flex items-center justify-center shadow-md transition-colors ${isWaiter ? 'bg-stone-800 hover:bg-stone-900' : 'bg-orange-500 hover:bg-orange-600'}`}>
+            <button className={`absolute bottom-0 right-0 text-white w-8 h-8 rounded-full border-2 border-white flex items-center justify-center shadow-md transition-colors ${isStaff ? 'bg-stone-800 hover:bg-stone-900' : 'bg-orange-500 hover:bg-orange-600'}`}>
               <Camera size={13} />
             </button>
           </div>
@@ -182,9 +191,9 @@ export default function ProfilePage() {
           <h2 className="text-2xl font-black text-stone-900">{user.fullName}</h2>
 
           <div className="mt-2.5">
-            {isWaiter ? (
+            {isStaff ? (
               <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-stone-700 bg-stone-100 border border-stone-200 px-3 py-1 rounded-full">
-                <ChefHat size={11} /> Floor Staff / Waiter
+                <UserCog size={11} /> {staffLabel}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-orange-600 bg-orange-50 border border-orange-100 px-3 py-1 rounded-full">
@@ -218,7 +227,7 @@ export default function ProfilePage() {
         )}
 
         {/* REWARDS CARD */}
-        {!isWaiter ? (
+        {!isStaff ? (
           <div className="bg-gradient-to-br from-stone-900 via-stone-800 to-neutral-900 text-white rounded-3xl p-6 shadow-md relative overflow-hidden border border-stone-800">
             <div className="absolute -right-6 -bottom-6 text-stone-700/20 pointer-events-none transform rotate-12">
               <Award size={140} />
@@ -227,7 +236,7 @@ export default function ProfilePage() {
             <div className="flex justify-between items-start mb-6">
               <div>
                 <span className="text-[10px] uppercase bg-orange-500 text-white px-2 py-0.5 rounded-md font-black tracking-widest flex items-center gap-1 w-fit">
-                  <Sparkles size={10} /> RestoPass Elite
+                  <Sparkles size={10} /> Babylon Rewards
                 </span>
                 <p className="text-xs text-stone-400 mt-1.5 font-medium">Available Balance</p>
                 <h3 className="text-2xl font-black tracking-tight mt-0.5 flex items-baseline gap-1.5 text-orange-400">
@@ -265,23 +274,12 @@ export default function ProfilePage() {
 
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h3 className="text-sm font-black tracking-wide uppercase text-white/90">Shift Performance</h3>
-                <p className="text-[11px] text-orange-100">Live operational ledger logs</p>
+                <h3 className="text-sm font-black tracking-wide uppercase text-white/90">{staffLabel}</h3>
+                <p className="text-[11px] text-orange-100">Head to your dashboard for live stats</p>
               </div>
               <span className="bg-white/20 text-white text-[10px] px-2 py-1 rounded-md font-bold uppercase tracking-wider backdrop-blur-xs">
-                Active Tier
+                {user.isAdmin ? "All Branches" : "Active"}
               </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 relative z-10 pt-1">
-              <div className="bg-white/10 rounded-2xl p-3 border border-white/10 backdrop-blur-xs">
-                <p className="text-[10px] uppercase tracking-wider text-orange-100 font-bold">Bills Printed</p>
-                <p className="text-xl font-black mt-0.5">14 <span className="text-xs font-medium text-orange-200">today</span></p>
-              </div>
-              <div className="bg-white/10 rounded-2xl p-3 border border-white/10 backdrop-blur-xs">
-                <p className="text-[10px] uppercase tracking-wider text-orange-100 font-bold">Void Ratio</p>
-                <p className="text-xl font-black mt-0.5">0.0% <span className="text-xs font-medium text-emerald-200">Perfect</span></p>
-              </div>
             </div>
           </div>
         )}
@@ -308,7 +306,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* DYNAMIC NAVIGATION OPTIONS MATRIX */}
+        {/* NAVIGATION OPTIONS */}
         <div className="bg-white rounded-2xl shadow-sm border border-stone-100 divide-y divide-stone-100 overflow-hidden">
           {options.map(({ icon: Icon, title, subtitle, onClick }) => (
             <button
@@ -317,15 +315,15 @@ export default function ProfilePage() {
               className="w-full p-4 hover:bg-stone-50/70 transition-colors flex items-center justify-between text-left group"
             >
               <div className="flex items-center space-x-4 min-w-0 flex-1 pr-2">
-                <div className={`w-10 h-10 bg-stone-50 rounded-xl flex items-center justify-center text-stone-500 transition-colors ${isWaiter ? 'group-hover:text-stone-900 group-hover:bg-stone-100' : 'group-hover:text-orange-500 group-hover:bg-orange-50'}`}>
+                <div className={`w-10 h-10 bg-stone-50 rounded-xl flex items-center justify-center text-stone-500 transition-colors ${isStaff ? 'group-hover:text-stone-900 group-hover:bg-stone-100' : 'group-hover:text-orange-500 group-hover:bg-orange-50'}`}>
                   <Icon size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h4 className={`text-sm font-bold text-stone-800 transition-colors ${isWaiter ? 'group-hover:text-stone-900' : 'group-hover:text-orange-600'}`}>{title}</h4>
+                  <h4 className={`text-sm font-bold text-stone-800 transition-colors ${isStaff ? 'group-hover:text-stone-900' : 'group-hover:text-orange-600'}`}>{title}</h4>
                   <p className="text-xs text-stone-400 truncate">{subtitle}</p>
                 </div>
               </div>
-              <ChevronRight size={14} className={`text-stone-300 transition-colors ${isWaiter ? 'group-hover:text-stone-900' : 'group-hover:text-orange-500'}`} />
+              <ChevronRight size={14} className={`text-stone-300 transition-colors ${isStaff ? 'group-hover:text-stone-900' : 'group-hover:text-orange-500'}`} />
             </button>
           ))}
         </div>
@@ -343,4 +341,4 @@ export default function ProfilePage() {
       <BottomNav />
     </div>
   );
-}
+            }
