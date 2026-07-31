@@ -1,13 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { Pencil, Trash2, Plus, Package, X, Upload, Image as ImageIcon, PackagePlus, Barcode } from 'lucide-react';
+import { Pencil, Trash2, Plus, Package, X, Upload, Image as ImageIcon, PackagePlus, Barcode, Boxes } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import ConfirmModal from '../Admin/ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
 import LabelPrintModal from './LabelPrintModal';
 
-const EMPTY_FORM = { name: '', barcode: '', category: 'General', unit: '', sellingPrice: '', reorderLevel: '', imageUrl: '', imagePublicId: '' };
-const EMPTY_STOCK = { quantity: '', costPerUnit: '', expiryDate: '', supplierNote: '' };
+const EMPTY_FORM = {
+    name: '', barcode: '', category: 'General', unit: '',
+    sellingPrice: '', reorderLevel: '',
+    packSize: '1', caseLabel: 'Carton', caseBarcode: '',
+    imageUrl: '', imagePublicId: '',
+};
+const EMPTY_STOCK = { quantity: '', costPerUnit: '', expiryDate: '', supplierNote: '', receivedAs: 'each' };
+const EMPTY_UNIT = { name: '', abbreviation: '' };
 
 export default function ProductManagement() {
     const { user } = useAuth(); // user.branch — storekeeper is always scoped to their own branch
@@ -23,6 +29,13 @@ export default function ProductManagement() {
     const [stockForm, setStockForm] = useState(EMPTY_STOCK);
     const [receiving, setReceiving] = useState(false);
     const [labelFor, setLabelFor] = useState(null);
+
+    // Unit management (was missing entirely — dropdown had nothing to select)
+    const [showUnitManager, setShowUnitManager] = useState(false);
+    const [unitForm, setUnitForm] = useState(EMPTY_UNIT);
+    const [savingUnit, setSavingUnit] = useState(false);
+    const [deletingUnitId, setDeletingUnitId] = useState(null);
+
     const fileRef = useRef();
 
     const fetchProducts = async () => {
@@ -55,6 +68,9 @@ export default function ProductManagement() {
             unit: item.unit?._id || item.unit || '',
             sellingPrice: item.sellingPrice,
             reorderLevel: item.reorderLevel || '',
+            packSize: String(item.packSize || 1),
+            caseLabel: item.caseLabel || 'Carton',
+            caseBarcode: item.caseBarcode || '',
             imageUrl: item.imageUrl || '',
             imagePublicId: item.imagePublicId || '',
         });
@@ -95,6 +111,7 @@ export default function ProductManagement() {
         if (!form.name || !form.sellingPrice || !form.unit) {
             return toast.error('Name, unit and selling price are required');
         }
+        const packSize = parseInt(form.packSize, 10) || 1;
         setSaving(true);
         try {
             const payload = {
@@ -104,6 +121,9 @@ export default function ProductManagement() {
                 unit: form.unit,
                 sellingPrice: parseFloat(form.sellingPrice),
                 reorderLevel: form.reorderLevel ? parseFloat(form.reorderLevel) : 0,
+                packSize,
+                caseLabel: packSize > 1 ? (form.caseLabel || 'Carton') : 'Carton',
+                caseBarcode: packSize > 1 ? (form.caseBarcode || null) : null,
                 imageUrl: form.imageUrl || null,
                 imagePublicId: form.imagePublicId || null,
                 branch: user.branch,
@@ -139,13 +159,14 @@ export default function ProductManagement() {
 
     const submitStock = async () => {
         if (!stockForm.quantity || stockForm.costPerUnit === '') {
-            return toast.error('Quantity and cost per unit are required');
+            return toast.error('Quantity and cost are required');
         }
         setReceiving(true);
         try {
             await API.post(`/products/${receivingFor._id}/receive-stock`, {
                 quantity: parseFloat(stockForm.quantity),
                 costPerUnit: parseFloat(stockForm.costPerUnit),
+                receivedAs: stockForm.receivedAs,
                 expiryDate: stockForm.expiryDate || null,
                 supplierNote: stockForm.supplierNote,
             });
@@ -159,6 +180,34 @@ export default function ProductManagement() {
         setReceiving(false);
     };
 
+    const addUnit = async () => {
+        if (!unitForm.name || !unitForm.abbreviation) {
+            return toast.error('Name and abbreviation are required');
+        }
+        setSavingUnit(true);
+        try {
+            await API.post('/inventory/units', unitForm);
+            toast.success('Unit added');
+            setUnitForm(EMPTY_UNIT);
+            fetchUnits();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to add unit');
+        }
+        setSavingUnit(false);
+    };
+
+    const removeUnit = async (unit) => {
+        setDeletingUnitId(unit._id);
+        try {
+            await API.delete(`/inventory/units/${unit._id}`);
+            toast.success('Unit removed');
+            fetchUnits();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Unit is in use — cannot remove');
+        }
+        setDeletingUnitId(null);
+    };
+
     const earliestExpiry = (product) => {
         const dated = (product.batches || []).filter((b) => b.expiryDate);
         if (!dated.length) return null;
@@ -167,12 +216,82 @@ export default function ProductManagement() {
 
     const isExpiringSoon = (date) => date && (new Date(date) - Date.now()) < 3 * 24 * 60 * 60 * 1000;
 
+    const hasCase = receivingFor && (receivingFor.packSize || 1) > 1;
+    const stockQtyNum = parseFloat(stockForm.quantity) || 0;
+    const stockCostNum = parseFloat(stockForm.costPerUnit) || 0;
+    const stockPreview = hasCase && stockForm.receivedAs === 'case' && stockQtyNum > 0
+        ? {
+              pieces: stockQtyNum * receivingFor.packSize,
+              costEach: stockCostNum / receivingFor.packSize,
+          }
+        : null;
+
     return (
         <div className="space-y-8 bg-gray-50 text-gray-800">
-            <div>
-                <h2 className="text-2xl font-black text-gray-800">Products & Stock</h2>
-                <p className="text-sm text-gray-500">Add products, receive stock batches, print labels, and track expiry</p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-2xl font-black text-gray-800">Products & Stock</h2>
+                    <p className="text-sm text-gray-500">Add products, receive stock batches, print labels, and track expiry</p>
+                </div>
+                <button
+                    onClick={() => setShowUnitManager((v) => !v)}
+                    className="flex items-center gap-2 bg-white border border-gray-200 hover:border-orange-400 text-sm font-bold text-gray-700 hover:text-orange-500 px-4 py-2 rounded-xl shadow-sm transition-colors"
+                >
+                    <Boxes size={15} /> Manage Units
+                </button>
             </div>
+
+            {showUnitManager && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                    <h3 className="text-base font-black text-gray-800 mb-1">Measurement Units</h3>
+                    <p className="text-xs text-gray-500 mb-4">
+                        Define the units products are sold in (Piece, Kg, Litre...) — these populate the "Unit" dropdown below.
+                    </p>
+                    <div className="flex flex-wrap gap-3 mb-4">
+                        <input
+                            value={unitForm.name}
+                            onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })}
+                            placeholder="e.g. Piece, Kilogram, Litre"
+                            className="input flex-1 min-w-[160px]"
+                        />
+                        <input
+                            value={unitForm.abbreviation}
+                            onChange={(e) => setUnitForm({ ...unitForm, abbreviation: e.target.value })}
+                            placeholder="e.g. pc, kg, l"
+                            className="input w-32"
+                        />
+                        <button
+                            onClick={addUnit}
+                            disabled={savingUnit}
+                            className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
+                        >
+                            <Plus size={15} /> {savingUnit ? 'Adding…' : 'Add Unit'}
+                        </button>
+                    </div>
+                    {units.length === 0 ? (
+                        <p className="text-xs text-gray-400 font-medium">No units yet — add one above before creating products.</p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {units.map((u) => (
+                                <span
+                                    key={u._id}
+                                    className="inline-flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-full pl-3 pr-1.5 py-1 text-xs font-bold text-gray-700"
+                                >
+                                    {u.name} ({u.abbreviation})
+                                    <button
+                                        onClick={() => removeUnit(u)}
+                                        disabled={deletingUnitId === u._id}
+                                        title="Remove unit"
+                                        className="text-gray-400 hover:text-red-500 disabled:opacity-40"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 h-fit shadow-sm">
@@ -191,7 +310,7 @@ export default function ProductManagement() {
                                 placeholder="e.g. Fresh Milk 500ml" className="input" />
                         </Field>
 
-                        <Field label="Barcode">
+                        <Field label="Barcode (each)">
                             <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })}
                                 placeholder="Scan or type EAN-13" className="input font-mono" />
                         </Field>
@@ -202,10 +321,20 @@ export default function ProductManagement() {
                         </Field>
 
                         <Field label="Unit">
-                            <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="input">
-                                <option value="">Select unit</option>
-                                {units.map((u) => <option key={u._id} value={u._id}>{u.name} ({u.abbreviation})</option>)}
-                            </select>
+                            {units.length === 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUnitManager(true)}
+                                    className="w-full text-left text-xs font-bold text-orange-500 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5 hover:bg-orange-100"
+                                >
+                                    No units yet — tap to add one first →
+                                </button>
+                            ) : (
+                                <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} className="input">
+                                    <option value="">Select unit</option>
+                                    {units.map((u) => <option key={u._id} value={u._id}>{u.name} ({u.abbreviation})</option>)}
+                                </select>
+                            )}
                         </Field>
 
                         <Field label="Selling Price (KES)">
@@ -217,6 +346,42 @@ export default function ProductManagement() {
                             <input type="number" value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })}
                                 placeholder="Alert when stock drops below this" className="input" />
                         </Field>
+
+                        <div className="border border-dashed border-gray-200 rounded-xl p-3 space-y-3 bg-gray-50/50">
+                            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
+                                Bought in cartons/boxes? (optional)
+                            </p>
+                            <Field label={`Pieces per ${form.caseLabel || 'Carton'}`}>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={form.packSize}
+                                    onChange={(e) => setForm({ ...form, packSize: e.target.value })}
+                                    placeholder="1 = sold loose, no carton"
+                                    className="input"
+                                />
+                            </Field>
+                            {parseInt(form.packSize, 10) > 1 && (
+                                <>
+                                    <Field label="What do you call the carton?">
+                                        <input
+                                            value={form.caseLabel}
+                                            onChange={(e) => setForm({ ...form, caseLabel: e.target.value })}
+                                            placeholder="Carton, Box, Crate..."
+                                            className="input"
+                                        />
+                                    </Field>
+                                    <Field label={`${form.caseLabel || 'Carton'} Barcode (optional)`}>
+                                        <input
+                                            value={form.caseBarcode}
+                                            onChange={(e) => setForm({ ...form, caseBarcode: e.target.value })}
+                                            placeholder="Separate barcode printed on the carton"
+                                            className="input font-mono"
+                                        />
+                                    </Field>
+                                </>
+                            )}
+                        </div>
 
                         <Field label="Product Image (optional — falls back to name)">
                             <div className="space-y-2">
@@ -256,6 +421,7 @@ export default function ProductManagement() {
                                 const stock = item.currentStock ?? 0;
                                 const low = item.reorderLevel > 0 && stock <= item.reorderLevel;
                                 const expiry = earliestExpiry(item);
+                                const packSize = item.packSize || 1;
                                 return (
                                     <div key={item._id} className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 hover:border-orange-500/40 transition-colors">
                                         <div className="flex items-center gap-3 min-w-0">
@@ -273,6 +439,11 @@ export default function ProductManagement() {
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${low ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
                                                         {stock} in stock
                                                     </span>
+                                                    {packSize > 1 && (
+                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                                                            {packSize}/{item.caseLabel || 'Carton'}
+                                                        </span>
+                                                    )}
                                                     {expiry && (
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${isExpiringSoon(expiry) ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-500'}`}>
                                                             Exp {new Date(expiry).toLocaleDateString()}
@@ -282,7 +453,7 @@ export default function ProductManagement() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-                                            <button onClick={() => setReceivingFor(item)} title="Receive stock"
+                                            <button onClick={() => { setReceivingFor(item); setStockForm(EMPTY_STOCK); }} title="Receive stock"
                                                 className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 py-1.5 rounded-lg">
                                                 <PackagePlus size={14} /> Stock
                                             </button>
@@ -317,13 +488,40 @@ export default function ProductManagement() {
                             </button>
                         </div>
                         <p className="text-xs text-gray-500 mb-4">{receivingFor.name}</p>
+
                         <div className="space-y-3">
-                            <Field label="Quantity Received">
+                            {hasCase && (
+                                <div className="flex bg-gray-100 rounded-xl p-1 mb-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setStockForm({ ...stockForm, receivedAs: 'each' })}
+                                        className={`flex-1 text-xs font-bold py-2 rounded-lg transition ${stockForm.receivedAs === 'each' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
+                                    >
+                                        By Each
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStockForm({ ...stockForm, receivedAs: 'case' })}
+                                        className={`flex-1 text-xs font-bold py-2 rounded-lg transition ${stockForm.receivedAs === 'case' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}
+                                    >
+                                        By {receivingFor.caseLabel || 'Carton'}
+                                    </button>
+                                </div>
+                            )}
+
+                            <Field label={stockForm.receivedAs === 'case' ? `${receivingFor.caseLabel || 'Cartons'} Received` : 'Quantity Received'}>
                                 <input type="number" value={stockForm.quantity} onChange={(e) => setStockForm({ ...stockForm, quantity: e.target.value })} className="input" />
                             </Field>
-                            <Field label="Cost Per Unit (KES)">
+                            <Field label={stockForm.receivedAs === 'case' ? `Cost Per ${receivingFor.caseLabel || 'Carton'} (KES)` : 'Cost Per Unit (KES)'}>
                                 <input type="number" value={stockForm.costPerUnit} onChange={(e) => setStockForm({ ...stockForm, costPerUnit: e.target.value })} className="input" />
                             </Field>
+
+                            {stockPreview && (
+                                <p className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                                    = {stockPreview.pieces.toLocaleString()} pieces at KES {stockPreview.costEach.toFixed(2)}/piece
+                                </p>
+                            )}
+
                             <Field label="Expiry Date (optional)">
                                 <input type="date" value={stockForm.expiryDate} onChange={(e) => setStockForm({ ...stockForm, expiryDate: e.target.value })} className="input" />
                             </Field>
@@ -368,4 +566,4 @@ function Field({ label, children }) {
             {children}
         </div>
     );
-                            }
+        }
