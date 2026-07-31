@@ -120,7 +120,7 @@ export default function PaymentDetailsModal({ open, onClose, receipt }) {
                     <div>
                         <h3 className="text-lg font-black text-gray-800">{receipt.billId}</h3>
                         <p className="text-orange-500 text-xs font-semibold mt-0.5">
-                            Table {receipt.tableNumber} {receipt.waiterName ? `· ${receipt.waiterName}` : ''}
+                            {receipt.branch?.name} {receipt.cashierName ? `· ${receipt.cashierName}` : ''}
                         </p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-orange-500 transition-colors">
