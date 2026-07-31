@@ -17,6 +17,7 @@
     "browser-image-compression": "^2.0.2",
     "framer-motion": "^12.23.12",
     "i18n-iso-countries": "^7.14.0",
+    "jsbarcode": "^3.12.3",
     "jwt-decode": "^4.0.0",
     "libphonenumber-js": "^1.12.13",
     "lucide-react": "^0.540.0",
