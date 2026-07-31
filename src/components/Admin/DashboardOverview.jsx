@@ -4,7 +4,7 @@ import API from '../../api/axios';
 import ViewItemsModal from './ViewItemsModal';
 import { kenyanDayBound, formatKenyanDateTime } from '../../utils/formatDate';
 
-export default function DashboardOverview() {
+export default function DashboardOverview({ branch } = {}) {
     const [revenueToday, setRevenueToday] = useState({ totalRevenue: 0, paidReceiptsCount: 0 });
     const [revenueSummary, setRevenueSummary] = useState({ totalRevenue: 0, totalReceipts: 0 });
     const [staffCount, setStaffCount] = useState(0);
@@ -19,13 +19,14 @@ export default function DashboardOverview() {
     const fetchAll = async () => {
         setLoading(true);
         try {
+            const branchParams = branch ? { branch } : {};
             const [rev, summary, staff, unpaidRes, paidRes, voidsRes] = await Promise.all([
-                API.get('/revenue/today'),
-                API.get('/revenue/summary'),
+                API.get('/revenue/today', { params: branchParams }),
+                API.get('/revenue/summary', { params: branchParams }),
                 API.get('/auth/staff-count'),
-                API.get('/receipts'),
-                API.get('/receipts/paid'),
-                API.get('/void-requests'),
+                API.get('/receipts', { params: branchParams }),
+                API.get('/receipts/paid', { params: branchParams }),
+                API.get('/void-requests', { params: branchParams }),
             ]);
             setRevenueToday(rev.data);
             setRevenueSummary(summary.data);
@@ -41,7 +42,8 @@ export default function DashboardOverview() {
 
     useEffect(() => {
         fetchAll();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [branch]);
 
     const combined = useMemo(() => {
         const all = [...unpaid, ...paid].sort(
@@ -118,12 +120,12 @@ export default function DashboardOverview() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <MetricCard
                     icon={TrendingUp}
-                    label="Total Revenue"
+                    label={branch ? 'Total Revenue (Branch)' : 'Total Revenue'}
                     value={`KES ${(revenueSummary.totalRevenue || 0).toLocaleString()}`}
                 />
                 <MetricCard
                     icon={ReceiptText}
-                    label="Total Receipts"
+                    label={branch ? 'Total Receipts (Branch)' : 'Total Receipts'}
                     value={(revenueSummary.totalReceipts || 0).toLocaleString()}
                 />
                 <MetricCard
@@ -160,8 +162,8 @@ export default function DashboardOverview() {
                         <thead>
                             <tr className="text-gray-400 font-semibold border-b border-gray-100">
                                 <th className="p-3">Bill ID</th>
-                                <th className="p-3">Waiter</th>
-                                <th className="p-3">Table</th>
+                                <th className="p-3">Cashier</th>
+                                <th className="p-3">Branch</th>
                                 <th className="p-3">Amount</th>
                                 <th className="p-3">Date</th>
                                 <th className="p-3">Status</th>
@@ -179,8 +181,8 @@ export default function DashboardOverview() {
                                 combined.map((r) => (
                                     <tr key={r._id} className="hover:bg-gray-50/70 transition-colors">
                                         <td className="p-3 font-bold text-orange-500">{r.billId}</td>
-                                        <td className="p-3 font-medium">{r.waiterName || '—'}</td>
-                                        <td className="p-3 font-semibold">Table {r.tableNumber}</td>
+                                        <td className="p-3 font-medium">{r.cashierName || '—'}</td>
+                                        <td className="p-3 font-semibold">{r.branch?.name || '—'}</td>
                                         <td className="p-3 font-bold text-gray-800">KES {r.subtotal.toLocaleString()}</td>
                                         <td className="p-3 text-xs text-gray-400">
                                             {formatKenyanDateTime(r.createdAt)}
@@ -208,8 +210,8 @@ export default function DashboardOverview() {
                 open={!!viewing}
                 onClose={() => setViewing(null)}
                 title={viewing?.billId}
-                subtitle={viewing ? `Table ${viewing.tableNumber} · ${viewing.waiterName || 'No waiter'}` : ''}
-                items={(viewing?.items || []).map((i) => ({ name: i.mealName, qty: i.quantity, price: i.unitPrice }))}
+                subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
+                items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
                 total={viewing?.subtotal}
                 payment={viewing ? paymentInfo(viewing) : null}
             />
@@ -240,4 +242,4 @@ function StatusPill({ status }) {
             {status}
         </span>
     );
-                }
+            }
