@@ -37,7 +37,7 @@ export default function ComboPayModal({ receipt, onClose, onPaid }) {
                     <div className="bg-white border border-gray-200 rounded-2xl p-8 w-full max-w-md shadow-xl animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
                         <h3 className="text-xl font-black text-gray-800 mb-2">Process Payment</h3>
                         <p className="text-gray-400 text-sm mb-6">
-                            {receipt.billId} · Table {receipt.tableNumber}
+                            {receipt.billId} · {receipt.branch?.name || ''}
                             {receipt.status === 'partial' && (
                                 <span className="ml-2 text-blue-600 font-bold">· Partially paid</span>
                             )}
