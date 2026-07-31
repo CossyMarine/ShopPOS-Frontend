@@ -22,7 +22,7 @@ export default function LoginPage({ onAuthed }) {
 
   const handleAuthSuccess = async (user) => {
     await onAuthed?.();
-    const isStaff = user.isAdmin || ["kitchen", "waiter", "accountant"].includes(user.role);
+    const isStaff = user.isAdmin || ["cashier", "storekeeper", "branchManager"].includes(user.role);
     if (isStaff) {
       navigate(routeForUser(user), { replace: true });
     } else {
@@ -55,7 +55,8 @@ export default function LoginPage({ onAuthed }) {
             <span className="text-orange-500">fully in control.</span>
           </h2>
           <p className="text-stone-400 text-base leading-relaxed max-w-md font-medium">
-            Seamlessly coordinate table terminals, staff dispatching, kitchen tickets, and customer bills—all from one lightning-fast terminal.
+            // Line ~58, replace the marketing copy:
+Seamlessly coordinate every register, branch, and storekeeper task—all from one lightning-fast terminal.
           </p>
         </div>
 
