@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, Boxes } from 'lucide-react';
 import { toast } from 'react-toastify';
+import imageCompression from 'browser-image-compression';
 import API from '../../api/axios';
 import ConfirmModal from '../Admin/ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
@@ -166,12 +167,20 @@ export default function ProductManagement() {
         if (!file) return;
         if (file.size > 5 * 1024 * 1024) return toast.error('Max file size is 5MB');
 
-        const formData = new FormData();
-        formData.append('image', file);
-
         try {
             setUploading(true);
-            const res = await API.post('/products/upload-image', formData);
+
+            const compressed = await imageCompression(file, {
+                maxSizeMB: 1,
+                maxWidthOrHeight: 1600,
+                useWebWorker: true,
+                initialQuality: 0.85,
+            });
+
+            const formData = new FormData();
+            formData.append('image', compressed, file.name);
+
+            const res = await API.post('/products/upload-image', formData, { timeout: 30000 });
             setForm((prev) => ({ ...prev, imageUrl: res.data.url, imagePublicId: res.data.publicId }));
             toast.success('Image uploaded');
         } catch (err) {
@@ -440,4 +449,4 @@ export default function ProductManagement() {
             `}</style>
         </div>
     );
-        }
+            }
