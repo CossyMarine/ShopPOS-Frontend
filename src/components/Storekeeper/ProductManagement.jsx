@@ -8,9 +8,12 @@ import LabelPrintModal from './LabelPrintModal';
 
 const EMPTY_FORM = {
     name: '', barcode: '', category: 'General', unit: '',
-    sellingPrice: '', reorderLevel: '',
+    sellingPrice: '', casePrice: '', reorderLevel: '',
     packSize: '1', caseLabel: 'Carton', caseBarcode: '',
     imageUrl: '', imagePublicId: '',
+    // Opening stock — only used when creating a NEW product, sent as a
+    // follow-up receive-stock call right after the product is saved.
+    openingQty: '', openingCost: '', openingReceivedAs: 'each',
 };
 const EMPTY_STOCK = { quantity: '', costPerUnit: '', expiryDate: '', supplierNote: '', receivedAs: 'each' };
 const EMPTY_UNIT = { name: '', abbreviation: '' };
@@ -30,7 +33,6 @@ export default function ProductManagement() {
     const [receiving, setReceiving] = useState(false);
     const [labelFor, setLabelFor] = useState(null);
 
-    // Unit management (was missing entirely — dropdown had nothing to select)
     const [showUnitManager, setShowUnitManager] = useState(false);
     const [unitForm, setUnitForm] = useState(EMPTY_UNIT);
     const [savingUnit, setSavingUnit] = useState(false);
@@ -59,14 +61,21 @@ export default function ProductManagement() {
 
     useEffect(() => { fetchProducts(); fetchUnits(); }, []);
 
+    const selectedUnit = units.find((u) => u._id === form.unit);
+    const unitAbbr = selectedUnit?.abbreviation || 'unit';
+    const packSizeNum = parseInt(form.packSize, 10) || 1;
+    const hasCasePricing = packSizeNum > 1;
+
     const startEdit = (item) => {
         setEditingId(item._id);
         setForm({
+            ...EMPTY_FORM,
             name: item.name,
             barcode: item.barcode || '',
             category: item.category,
             unit: item.unit?._id || item.unit || '',
             sellingPrice: item.sellingPrice,
+            casePrice: item.casePrice ?? '',
             reorderLevel: item.reorderLevel || '',
             packSize: String(item.packSize || 1),
             caseLabel: item.caseLabel || 'Carton',
@@ -111,7 +120,10 @@ export default function ProductManagement() {
         if (!form.name || !form.sellingPrice || !form.unit) {
             return toast.error('Name, unit and selling price are required');
         }
-        const packSize = parseInt(form.packSize, 10) || 1;
+        if (form.openingQty && !form.openingCost && form.openingCost !== 0) {
+            return toast.error('Enter the buying price for the opening stock, or leave both blank');
+        }
+
         setSaving(true);
         try {
             const payload = {
@@ -120,10 +132,11 @@ export default function ProductManagement() {
                 category: form.category || 'General',
                 unit: form.unit,
                 sellingPrice: parseFloat(form.sellingPrice),
+                casePrice: hasCasePricing && form.casePrice !== '' ? parseFloat(form.casePrice) : null,
                 reorderLevel: form.reorderLevel ? parseFloat(form.reorderLevel) : 0,
-                packSize,
-                caseLabel: packSize > 1 ? (form.caseLabel || 'Carton') : 'Carton',
-                caseBarcode: packSize > 1 ? (form.caseBarcode || null) : null,
+                packSize: packSizeNum,
+                caseLabel: hasCasePricing ? (form.caseLabel || 'Carton') : 'Carton',
+                caseBarcode: hasCasePricing ? (form.caseBarcode || null) : null,
                 imageUrl: form.imageUrl || null,
                 imagePublicId: form.imagePublicId || null,
                 branch: user.branch,
@@ -133,8 +146,20 @@ export default function ProductManagement() {
                 await API.put(`/products/${editingId}`, payload);
                 toast.success('Product updated');
             } else {
-                await API.post('/products', payload);
-                toast.success('Product added — now receive its opening stock');
+                const created = await API.post('/products', payload);
+
+                // Opening stock — quantity + buying price entered right here,
+                // rather than forcing a second trip to "Receive Stock".
+                if (form.openingQty) {
+                    await API.post(`/products/${created.data._id}/receive-stock`, {
+                        quantity: parseFloat(form.openingQty),
+                        costPerUnit: parseFloat(form.openingCost),
+                        receivedAs: hasCasePricing ? form.openingReceivedAs : 'each',
+                    });
+                    toast.success('Product added with opening stock');
+                } else {
+                    toast.success('Product added — remember to receive its opening stock');
+                }
             }
             cancelEdit();
             fetchProducts();
@@ -216,14 +241,19 @@ export default function ProductManagement() {
 
     const isExpiringSoon = (date) => date && (new Date(date) - Date.now()) < 3 * 24 * 60 * 60 * 1000;
 
+    // Live preview for the Receive Stock modal
     const hasCase = receivingFor && (receivingFor.packSize || 1) > 1;
     const stockQtyNum = parseFloat(stockForm.quantity) || 0;
     const stockCostNum = parseFloat(stockForm.costPerUnit) || 0;
     const stockPreview = hasCase && stockForm.receivedAs === 'case' && stockQtyNum > 0
-        ? {
-              pieces: stockQtyNum * receivingFor.packSize,
-              costEach: stockCostNum / receivingFor.packSize,
-          }
+        ? { pieces: stockQtyNum * receivingFor.packSize, costEach: stockCostNum / receivingFor.packSize }
+        : null;
+
+    // Live preview for the Opening Stock block on the Add Product form
+    const openQtyNum = parseFloat(form.openingQty) || 0;
+    const openCostNum = parseFloat(form.openingCost) || 0;
+    const openingPreview = hasCasePricing && form.openingReceivedAs === 'case' && openQtyNum > 0
+        ? { pieces: openQtyNum * packSizeNum, costEach: openCostNum / packSizeNum }
         : null;
 
     return (
@@ -245,7 +275,7 @@ export default function ProductManagement() {
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 className="text-base font-black text-gray-800 mb-1">Measurement Units</h3>
                     <p className="text-xs text-gray-500 mb-4">
-                        Define the units products are sold in (Piece, Kg, Litre...) — these populate the "Unit" dropdown below.
+                        Define the units products are sold in (Piece, Kilogram, Litre...) — these populate the "Unit" dropdown below.
                     </p>
                     <div className="flex flex-wrap gap-3 mb-4">
                         <input
@@ -307,7 +337,7 @@ export default function ProductManagement() {
                     <div className="space-y-4">
                         <Field label="Product Name">
                             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                placeholder="e.g. Fresh Milk 500ml" className="input" />
+                                placeholder="e.g. Sugar, Fresh Milk 500ml" className="input" />
                         </Field>
 
                         <Field label="Barcode (each)">
@@ -320,7 +350,7 @@ export default function ProductManagement() {
                                 placeholder="Dairy, Bakery, Pantry..." className="input" />
                         </Field>
 
-                        <Field label="Unit">
+                        <Field label="Unit (sold loose as)">
                             {units.length === 0 ? (
                                 <button
                                     type="button"
@@ -337,9 +367,9 @@ export default function ProductManagement() {
                             )}
                         </Field>
 
-                        <Field label="Selling Price (KES)">
+                        <Field label={`Selling Price per ${unitAbbr} (KES)`}>
                             <input type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
-                                placeholder="60" className="input" />
+                                placeholder="e.g. 180" className="input" />
                         </Field>
 
                         <Field label="Reorder Level">
@@ -349,39 +379,106 @@ export default function ProductManagement() {
 
                         <div className="border border-dashed border-gray-200 rounded-xl p-3 space-y-3 bg-gray-50/50">
                             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
-                                Bought in cartons/boxes? (optional)
+                                Also bought/sold whole? (sack, carton, box — optional)
                             </p>
-                            <Field label={`Pieces per ${form.caseLabel || 'Carton'}`}>
+                            <Field label={`${unitAbbr} per ${form.caseLabel || 'Carton'}`}>
                                 <input
                                     type="number"
                                     min="1"
                                     value={form.packSize}
                                     onChange={(e) => setForm({ ...form, packSize: e.target.value })}
-                                    placeholder="1 = sold loose, no carton"
+                                    placeholder="1 = sold loose only, no whole-unit pricing"
                                     className="input"
                                 />
                             </Field>
-                            {parseInt(form.packSize, 10) > 1 && (
+                            {hasCasePricing && (
                                 <>
-                                    <Field label="What do you call the carton?">
+                                    <Field label="What do you call it?">
                                         <input
                                             value={form.caseLabel}
                                             onChange={(e) => setForm({ ...form, caseLabel: e.target.value })}
-                                            placeholder="Carton, Box, Crate..."
+                                            placeholder="Sack, Carton, Crate, Box..."
                                             className="input"
                                         />
+                                    </Field>
+                                    <Field label={`Selling Price per whole ${form.caseLabel || 'Carton'} (KES)`}>
+                                        <input
+                                            type="number"
+                                            value={form.casePrice}
+                                            onChange={(e) => setForm({ ...form, casePrice: e.target.value })}
+                                            placeholder="e.g. 6000 — set independently, not auto-calculated"
+                                            className="input"
+                                        />
+                                        <p className="text-[11px] text-gray-400 mt-1">
+                                            Not forced to equal {unitAbbr} price × {form.packSize || 1} — bulk pricing is its own number.
+                                        </p>
                                     </Field>
                                     <Field label={`${form.caseLabel || 'Carton'} Barcode (optional)`}>
                                         <input
                                             value={form.caseBarcode}
                                             onChange={(e) => setForm({ ...form, caseBarcode: e.target.value })}
-                                            placeholder="Separate barcode printed on the carton"
+                                            placeholder="Separate barcode printed on the whole unit"
                                             className="input font-mono"
                                         />
                                     </Field>
                                 </>
                             )}
                         </div>
+
+                        {!editingId && (
+                            <div className="border border-dashed border-green-200 rounded-xl p-3 space-y-3 bg-green-50/40">
+                                <p className="text-[11px] font-bold text-green-700 uppercase tracking-wide">
+                                    Opening Stock (optional — what you actually bought)
+                                </p>
+
+                                {hasCasePricing && (
+                                    <div className="flex bg-white rounded-xl p-1 border border-green-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm({ ...form, openingReceivedAs: 'each' })}
+                                            className={`flex-1 text-xs font-bold py-1.5 rounded-lg transition ${form.openingReceivedAs === 'each' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500'}`}
+                                        >
+                                            By {unitAbbr}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm({ ...form, openingReceivedAs: 'case' })}
+                                            className={`flex-1 text-xs font-bold py-1.5 rounded-lg transition ${form.openingReceivedAs === 'case' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500'}`}
+                                        >
+                                            By {form.caseLabel || 'Carton'}
+                                        </button>
+                                    </div>
+                                )}
+
+                                <Field label={hasCasePricing && form.openingReceivedAs === 'case' ? `${form.caseLabel || 'Cartons'} Bought` : `Quantity Bought (${unitAbbr})`}>
+                                    <input
+                                        type="number"
+                                        value={form.openingQty}
+                                        onChange={(e) => setForm({ ...form, openingQty: e.target.value })}
+                                        placeholder="e.g. 1"
+                                        className="input"
+                                    />
+                                </Field>
+                                <Field label={hasCasePricing && form.openingReceivedAs === 'case' ? `Buying Price per ${form.caseLabel || 'Carton'} (KES)` : `Buying Price per ${unitAbbr} (KES)`}>
+                                    <input
+                                        type="number"
+                                        value={form.openingCost}
+                                        onChange={(e) => setForm({ ...form, openingCost: e.target.value })}
+                                        placeholder="e.g. 5000"
+                                        className="input"
+                                    />
+                                </Field>
+
+                                {openingPreview && (
+                                    <p className="text-xs font-bold text-green-700 bg-white border border-green-200 rounded-lg px-3 py-2">
+                                        = {openingPreview.pieces.toLocaleString()} {unitAbbr} at KES {openingPreview.costEach.toFixed(2)}/{unitAbbr}
+                                    </p>
+                                )}
+                                <p className="text-[11px] text-gray-400">
+                                    Leave blank to add the product without stock — you can receive stock later from the catalog.
+                                </p>
+                            </div>
+                        )}
 
                         <Field label="Product Image (optional — falls back to name)">
                             <div className="space-y-2">
@@ -434,10 +531,15 @@ export default function ProductManagement() {
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <h4 className="font-bold text-gray-800 text-sm truncate">{item.name}</h4>
-                                                <p className="text-xs text-orange-500 font-bold mt-0.5">KES {item.sellingPrice?.toLocaleString()}</p>
+                                                <p className="text-xs text-orange-500 font-bold mt-0.5">
+                                                    KES {item.sellingPrice?.toLocaleString()}/{item.unit?.abbreviation || 'unit'}
+                                                    {packSize > 1 && item.casePrice != null && (
+                                                        <span className="text-gray-400 font-semibold"> · KES {item.casePrice.toLocaleString()}/{item.caseLabel}</span>
+                                                    )}
+                                                </p>
                                                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${low ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
-                                                        {stock} in stock
+                                                        {stock} {item.unit?.abbreviation || ''} in stock
                                                     </span>
                                                     {packSize > 1 && (
                                                         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
@@ -566,4 +668,4 @@ function Field({ label, children }) {
             {children}
         </div>
     );
-        }
+                                    }
