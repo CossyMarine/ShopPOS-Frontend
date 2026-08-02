@@ -306,7 +306,7 @@ export default function CashierPage() {
                 </section>
 
                 {/* CART */}
-                <section className="w-2/5 bg-gray-50 flex flex-col justify-between overflow-hidden">
+                <section className="w-2/5 bg-gray-50 flex flex-col overflow-hidden">
                     <div className="p-3.5 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
                         <h2 className="font-extrabold text-sm text-gray-900">Current Checkout</h2>
                         {cart.length > 0 && (
@@ -316,37 +316,40 @@ export default function CashierPage() {
                         )}
                     </div>
 
-                    <div className="flex-1 p-3 overflow-y-auto space-y-2">
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
                         {cart.length === 0 ? (
                             <p className="text-center text-gray-400 text-xs py-10">Scan a barcode or tap a product</p>
                         ) : (
-                            cart.map((item) => (
-                                <div key={item.productId} className="bg-white p-2.5 rounded-xl border border-gray-200 flex items-center justify-between">
-                                    <div className="flex-1 min-w-0 pr-2">
-                                        <h4 className="text-xs font-bold text-gray-900 truncate">{item.productName}</h4>
-                                        <span className="text-[10px] text-gray-500">{item.unitPrice} KES × {item.quantity}</span>
+                            <>
+                                {cart.map((item) => (
+                                    <div key={item.productId} className="bg-white p-2.5 rounded-xl border border-gray-200 flex items-center justify-between">
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <h4 className="text-xs font-bold text-gray-900 truncate">{item.productName}</h4>
+                                            <span className="text-[10px] text-gray-500">{item.unitPrice} KES × {item.quantity}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <button onClick={() => updateQty(item.productId, -1)} className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center"><Minus size={12} /></button>
+                                            <span className="text-xs font-extrabold w-5 text-center">{item.quantity}</span>
+                                            <button onClick={() => updateQty(item.productId, 1)} className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center"><Plus size={12} /></button>
+                                            <span className="text-xs font-extrabold text-brand-orange w-14 text-right">{item.unitPrice * item.quantity}</span>
+                                            <button onClick={() => removeItem(item.productId)} className="text-gray-300 hover:text-red-500"><X size={14} /></button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <button onClick={() => updateQty(item.productId, -1)} className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center"><Minus size={12} /></button>
-                                        <span className="text-xs font-extrabold w-5 text-center">{item.quantity}</span>
-                                        <button onClick={() => updateQty(item.productId, 1)} className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center"><Plus size={12} /></button>
-                                        <span className="text-xs font-extrabold text-brand-orange w-14 text-right">{item.unitPrice * item.quantity}</span>
-                                        <button onClick={() => removeItem(item.productId)} className="text-gray-300 hover:text-red-500"><X size={14} /></button>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
+                                ))}
 
-                    <div className="p-3.5 bg-white border-t border-gray-200 space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm font-extrabold text-gray-900">Total ({totalQty} items)</span>
-                            <span className="text-xl font-black text-brand-orange">{subtotal.toLocaleString()} KES</span>
-                        </div>
-                        <button onClick={handleCheckout} disabled={checkingOut || cart.length === 0}
-                            className="w-full py-3 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-xl text-sm font-extrabold disabled:opacity-50">
-                            {checkingOut ? 'Starting…' : 'Purchase / Checkout'}
-                        </button>
+                                {/* Total + Pay button now sit right after the last product, not pinned to the screen bottom */}
+                                <div className="pt-1 space-y-2.5">
+                                    <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-200">
+                                        <span className="text-sm font-extrabold text-gray-900">Total ({totalQty} items)</span>
+                                        <span className="text-xl font-black text-brand-orange">{subtotal.toLocaleString()} KES</span>
+                                    </div>
+                                    <button onClick={handleCheckout} disabled={checkingOut || cart.length === 0}
+                                        className="w-full py-3 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-xl text-sm font-extrabold disabled:opacity-50">
+                                        {checkingOut ? 'Starting…' : 'Purchase / Checkout'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </section>
             </div>
@@ -360,4 +363,4 @@ export default function CashierPage() {
             <HistoryModal open={showHistory} branch={user.branch} onClose={() => setShowHistory(false)} />
         </div>
     );
-                }
+                                        }
