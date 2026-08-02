@@ -8,6 +8,7 @@ import API from '../api/axios';
 
 export default function CustomerPage() {
     const { user } = useAuth();
+    const isCustomer = user?.role === 'customer';
     const [branches, setBranches] = useState([]);
     const [branch, setBranch] = useState(() => localStorage.getItem('shopping_branch') || '');
     const [products, setProducts] = useState([]);
@@ -35,14 +36,14 @@ export default function CustomerPage() {
     useEffect(() => { if (branch) localStorage.setItem('shopping_branch', branch); }, [branch]);
 
     useEffect(() => {
-        if (!user) return;
+        if (!isCustomer) return;
         API.get('/customer/favorites').then((res) => setFavoriteIds(new Set(res.data.map((p) => p._id)))).catch(() => {});
         API.get('/wallet/me').then((res) => setWallet(res.data)).catch(() => {});
-    }, [user]);
+    }, [isCustomer]);
 
     const toggleFavorite = async (productId, e) => {
         e.stopPropagation();
-        if (!user) return toast.info('Log in to save favorites');
+        if (!isCustomer) return toast.info('Log in to save favorites');
         try {
             const res = await API.post(`/customer/favorites/${productId}/toggle`);
             setFavoriteIds((prev) => {
@@ -67,7 +68,7 @@ export default function CustomerPage() {
                     <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center font-black text-lg text-white">B</div>
                     <span className="font-black text-gray-900">Babylon Portal</span>
                 </div>
-                {user ? (
+                {isCustomer ? (
                     <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded-xl">
                         <Coins size={13} className="text-orange-500" />
                         <span className="text-xs font-extrabold text-orange-600">{wallet?.points ?? 0} PTS</span>
@@ -151,4 +152,4 @@ export default function CustomerPage() {
             <BottomNav />
         </div>
     );
-          }
+                        }
