@@ -2,16 +2,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { toast } from 'react-toastify';
-import { Barcode, Trash2, Plus, Minus, X, Lock, ShieldAlert, Pause } from 'lucide-react';
+import { Barcode, Trash2, Plus, Minus, X, Lock, ShieldAlert, History, UserCircle2, LogOut } from 'lucide-react';
 import API from '../api/axios';
 import { useAuth } from '../hooks/useAuth';
 import PaymentModal from '../components/Cashier/PaymentModal';
 import OpenShiftModal from '../components/Cashier/OpenShiftModal';
 import CloseShiftModal from '../components/Cashier/CloseShiftModal';
 import VoidRequestModal from '../components/Cashier/VoidRequestModal';
+import HistoryModal from '../components/Cashier/HistoryModal';
+import { formatKenyanDate, formatKenyanTime } from '../utils/formatDate';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 const REGISTER_ID = 'reg-1'; // one cashier login = one physical register; make this configurable if a branch runs multiple
+
+function initialsOf(name = '') {
+    return name.trim().split(/\s+/).map((n) => n[0]).slice(0, 2).join('').toUpperCase() || '?';
+}
 
 export default function CashierPage() {
     const navigate = useNavigate();
@@ -21,6 +27,7 @@ export default function CashierPage() {
     const [showOpenShift, setShowOpenShift] = useState(false);
     const [showCloseShift, setShowCloseShift] = useState(false);
     const [showVoid, setShowVoid] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const [products, setProducts] = useState([]);
     const [category, setCategory] = useState('All');
@@ -30,8 +37,16 @@ export default function CashierPage() {
     const [showPayment, setShowPayment] = useState(false);
     const [checkingOut, setCheckingOut] = useState(false);
 
+    const [now, setNow] = useState(new Date());
+
     const socketRef = useRef(null);
     const barcodeRef = useRef(null);
+
+    // ---- Live Kenyan clock in the header ----
+    useEffect(() => {
+        const t = setInterval(() => setNow(new Date()), 1000 * 30);
+        return () => clearInterval(t);
+    }, []);
 
     // ---- Shift gate ----
     const fetchShift = useCallback(async () => {
@@ -147,6 +162,11 @@ export default function CashierPage() {
         toast.success('Sale complete');
     };
 
+    const handleLogout = async () => {
+        await logout();
+        navigate('/login');
+    };
+
     const categories = ['All', ...new Set(products.map((p) => p.category))];
     const visibleProducts = category === 'All' ? products : products.filter((p) => p.category === category);
 
@@ -156,9 +176,9 @@ export default function CashierPage() {
     if (!shift) {
         return (
             <div className="h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
-                <Lock size={32} className="text-orange-500" />
+                <Lock size={32} className="text-brand-orange" />
                 <p className="text-gray-600 font-semibold">Open your shift to start selling</p>
-                <button onClick={() => setShowOpenShift(true)} className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold">
+                <button onClick={() => setShowOpenShift(true)} className="bg-brand-orange hover:bg-brand-orange-hover text-white px-6 py-2.5 rounded-xl text-sm font-bold">
                     Open Shift
                 </button>
                 <OpenShiftModal open={showOpenShift} onClose={() => setShowOpenShift(false)} onOpened={() => { setShowOpenShift(false); fetchShift(); }} />
@@ -169,16 +189,60 @@ export default function CashierPage() {
     return (
         <div className="h-screen flex flex-col bg-gray-100">
             {/* HEADER */}
-            <header className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm">
-                <div>
-                    <h1 className="font-extrabold text-base text-gray-900">Babylon POS</h1>
-                    <span className="text-xs text-gray-500">{user.fullName} — Shift open</span>
+            <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-lg bg-brand-orange flex items-center justify-center font-extrabold text-lg text-white shadow-md shrink-0">
+                        B
+                    </div>
+                    <div className="min-w-0">
+                        <h1 className="font-extrabold text-sm sm:text-base leading-none text-gray-900 truncate">Babylon POS</h1>
+                        <span className="text-[11px] font-semibold text-brand-orange">
+                            {formatKenyanDate(now, { weekday: 'short', day: '2-digit', month: 'short' })} · {formatKenyanTime(now)} EAT
+                        </span>
+                    </div>
+                    <div className="h-6 w-px bg-gray-200 hidden md:block" />
+                    <div className="hidden md:flex items-center gap-1.5 text-[11px] font-bold text-gray-600 bg-gray-100 px-2.5 py-1.5 rounded-lg shrink-0">
+                        <Barcode size={13} className="text-brand-orange" />
+                        Register #1
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => setShowVoid(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200">
-                        <ShieldAlert size={14} /> Void Sale
+
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <button onClick={() => setShowHistory(true)} title="Bill history & voids"
+                        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                        <History size={14} />
+                        <span className="hidden sm:inline">History</span>
                     </button>
-                    <button onClick={() => setShowCloseShift(true)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Close shift">
+
+                    <button onClick={() => setShowVoid(true)} title="Request void on a specific bill"
+                        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition">
+                        <ShieldAlert size={14} />
+                        <span className="hidden sm:inline">Void</span>
+                    </button>
+
+                    <button onClick={() => navigate('/home')} title="Customer Dashboard"
+                        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                        <UserCircle2 size={14} />
+                        <span className="hidden sm:inline">Customer Dashboard</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 bg-orange-50/80 px-2 py-1.5 rounded-lg border border-orange-100 shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-brand-orange text-white text-xs flex items-center justify-center font-bold shrink-0">
+                            {initialsOf(user.fullName)}
+                        </div>
+                        <div className="text-left hidden md:block">
+                            <p className="text-xs font-bold text-gray-900 leading-none truncate max-w-[100px]">{user.fullName}</p>
+                            <span className="text-[10px] text-gray-500 font-medium">Shift Active</span>
+                        </div>
+                    </div>
+
+                    <button onClick={handleLogout} title="Log out"
+                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
+                        <LogOut size={16} />
+                    </button>
+
+                    <button onClick={() => setShowCloseShift(true)} title="Close register / lock shift"
+                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
                         <Lock size={16} />
                     </button>
                 </div>
@@ -189,7 +253,7 @@ export default function CashierPage() {
                 <section className="w-3/5 flex flex-col border-r border-gray-200 bg-white overflow-hidden">
                     <div className="p-3 border-b border-gray-100 bg-gray-50/50 space-y-2.5">
                         <div className="relative">
-                            <Barcode size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-orange-500" />
+                            <Barcode size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-orange" />
                             <input
                                 ref={barcodeRef}
                                 autoFocus
@@ -197,16 +261,16 @@ export default function CashierPage() {
                                 onChange={(e) => setBarcode(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleBarcodeSubmit()}
                                 placeholder="Scan barcode or type item…"
-                                className="w-full pl-11 pr-20 py-2.5 bg-white border-2 border-orange-500/30 rounded-xl text-sm font-semibold focus:outline-none focus:border-orange-500"
+                                className="w-full pl-11 pr-20 py-2.5 bg-white border-2 border-brand-orange/30 rounded-xl text-sm font-semibold focus:outline-none focus:border-brand-orange"
                             />
-                            <button onClick={handleBarcodeSubmit} className="absolute right-1.5 top-1.5 bottom-1.5 bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg text-xs font-bold">
+                            <button onClick={handleBarcodeSubmit} className="absolute right-1.5 top-1.5 bottom-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white px-3 rounded-lg text-xs font-bold">
                                 Add
                             </button>
                         </div>
                         <div className="flex items-center gap-2 overflow-x-auto pb-1">
                             {categories.map((c) => (
                                 <button key={c} onClick={() => setCategory(c)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${category === c ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${category === c ? 'bg-brand-orange text-white' : 'bg-gray-200 text-gray-700'}`}>
                                     {c}
                                 </button>
                             ))}
@@ -219,7 +283,7 @@ export default function CashierPage() {
                                 const stock = p.currentStock ?? 0;
                                 return (
                                     <button key={p._id} onClick={() => stock > 0 && addToCart(p)} disabled={stock <= 0}
-                                        className="text-left p-2.5 bg-white rounded-xl border border-gray-200 hover:border-orange-500 hover:shadow-md transition flex flex-col disabled:opacity-40">
+                                        className="text-left p-2.5 bg-white rounded-xl border border-gray-200 hover:border-brand-orange hover:shadow-md transition flex flex-col disabled:opacity-40">
                                         <div className="w-full h-16 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-1.5">
                                             {p.imageUrl ? (
                                                 <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
@@ -229,7 +293,7 @@ export default function CashierPage() {
                                         </div>
                                         <h4 className="text-xs font-bold text-gray-800 line-clamp-2">{p.name}</h4>
                                         <div className="mt-1.5 flex justify-between items-center">
-                                            <span className="text-xs font-extrabold text-orange-500">{p.sellingPrice} KES</span>
+                                            <span className="text-xs font-extrabold text-brand-orange">{p.sellingPrice} KES</span>
                                             <span className={`text-[9px] font-bold px-1 rounded ${stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                                                 {stock > 0 ? stock : 'Out'}
                                             </span>
@@ -266,7 +330,7 @@ export default function CashierPage() {
                                         <button onClick={() => updateQty(item.productId, -1)} className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center"><Minus size={12} /></button>
                                         <span className="text-xs font-extrabold w-5 text-center">{item.quantity}</span>
                                         <button onClick={() => updateQty(item.productId, 1)} className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center"><Plus size={12} /></button>
-                                        <span className="text-xs font-extrabold text-orange-500 w-14 text-right">{item.unitPrice * item.quantity}</span>
+                                        <span className="text-xs font-extrabold text-brand-orange w-14 text-right">{item.unitPrice * item.quantity}</span>
                                         <button onClick={() => removeItem(item.productId)} className="text-gray-300 hover:text-red-500"><X size={14} /></button>
                                     </div>
                                 </div>
@@ -277,10 +341,10 @@ export default function CashierPage() {
                     <div className="p-3.5 bg-white border-t border-gray-200 space-y-3">
                         <div className="flex justify-between items-center">
                             <span className="text-sm font-extrabold text-gray-900">Total ({totalQty} items)</span>
-                            <span className="text-xl font-black text-orange-500">{subtotal.toLocaleString()} KES</span>
+                            <span className="text-xl font-black text-brand-orange">{subtotal.toLocaleString()} KES</span>
                         </div>
                         <button onClick={handleCheckout} disabled={checkingOut || cart.length === 0}
-                            className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-extrabold disabled:opacity-50">
+                            className="w-full py-3 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-xl text-sm font-extrabold disabled:opacity-50">
                             {checkingOut ? 'Starting…' : 'Purchase / Checkout'}
                         </button>
                     </div>
@@ -293,6 +357,7 @@ export default function CashierPage() {
             <CloseShiftModal open={showCloseShift} shiftId={shift?._id} onClose={() => setShowCloseShift(false)}
                 onClosed={() => { setShowCloseShift(false); navigate('/login'); logout(); }} />
             <VoidRequestModal open={showVoid} branch={user.branch} onClose={() => setShowVoid(false)} />
+            <HistoryModal open={showHistory} branch={user.branch} onClose={() => setShowHistory(false)} />
         </div>
     );
-                                                       }
+                }
