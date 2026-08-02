@@ -49,12 +49,6 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
     const handleTill = async () => {
         setProcessing(true);
         try {
-            await API.patch(`/receipts/${receipt._id}/pay/cash-till`, { cashAmount: 0.01 });
-            // cash-till requires a cash leg > 0; for a pure till payment use the combo endpoint instead:
-        } catch {
-            // fall through to combo below
-        }
-        try {
             await API.patch(`/receipts/${receipt._id}/pay/combo`, { tillAmount: balanceDue });
             finishAndAskReward();
         } catch (err) {
