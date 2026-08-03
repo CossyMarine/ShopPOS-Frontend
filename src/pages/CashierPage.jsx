@@ -41,6 +41,9 @@ export default function CashierPage() {
 
     const socketRef = useRef(null);
     const barcodeRef = useRef(null);
+    // Mirrors `receipt` in a ref so the beforeunload handler (added once on
+    // mount) always sees the latest unpaid receipt without re-binding.
+    const receiptRef = useRef(null);
 
     // ---- Live Kenyan clock in the header ----
     useEffect(() => {
@@ -161,6 +164,44 @@ export default function CashierPage() {
         fetchProducts(); // refresh stock counts after FIFO deduction
         toast.success('Sale complete');
     };
+
+    // ---- Abandoned checkout: the cashier closed the payment popup before
+    // paying. The bill and its FIFO stock deduction already exist on the
+    // backend at this point, so we tell the server to restock + void it —
+    // the cart itself is left alone so the cashier can just hit Purchase
+    // again. Safe to call more than once; the backend no-ops if the bill
+    // was already paid or already cancelled. ----
+    const handleCancelCheckout = useCallback(async (silent = false) => {
+        const r = receiptRef.current;
+        setShowPayment(false);
+        setReceipt(null);
+        if (!r) return;
+        try {
+            await API.post(`/receipts/${r._id}/cancel`);
+            if (!silent) toast.info('Checkout cancelled — stock released');
+            fetchProducts();
+        } catch (err) {
+            if (!silent) toast.error(err.response?.data?.message || 'Failed to cancel checkout');
+        }
+    }, [fetchProducts]);
+
+    // Keep the ref in sync so the beforeunload handler below (bound once)
+    // always sees the current unpaid receipt, if any.
+    useEffect(() => { receiptRef.current = receipt; }, [receipt]);
+
+    // ---- Tab/window closed mid-checkout: sendBeacon fires a best-effort
+    // cancel request as the page unloads (cookies still travel with it, so
+    // auth still works; a normal fetch/axios call isn't reliable here). ----
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            const r = receiptRef.current;
+            if (!r) return;
+            const base = (API.defaults.baseURL || '').replace(/\/$/, '');
+            navigator.sendBeacon?.(`${base}/receipts/${r._id}/cancel`);
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, []);
 
     const handleLogout = async () => {
         await logout();
@@ -361,7 +402,7 @@ export default function CashierPage() {
             </div>
 
             {showPayment && receipt && (
-                <PaymentModal receipt={receipt} onClose={() => setShowPayment(false)} onComplete={handlePaymentComplete} />
+                <PaymentModal receipt={receipt} onClose={handleCancelCheckout} onComplete={handlePaymentComplete} />
             )}
             <CloseShiftModal open={showCloseShift} shiftId={shift?._id} onClose={() => setShowCloseShift(false)}
                 onClosed={() => { setShowCloseShift(false); navigate('/login'); logout(); }} />
@@ -369,4 +410,4 @@ export default function CashierPage() {
             <HistoryModal open={showHistory} branch={user.branch} onClose={() => setShowHistory(false)} />
         </div>
     );
-                                        }
+        }
