@@ -16,8 +16,13 @@ import ProductTable from './ProductTable';
 import ProductFormModal from './ProductFormModal';
 import ReceiveStockModal from './ReceiveStockModal';
 
-export default function ProductManagement() {
+export default function ProductManagement({ branch }) {
     const { user } = useAuth();
+    // Storekeeper/branchManager are locked to their own branch (user.branch).
+    // Super Admin uses whichever branch is selected in the dashboard header —
+    // passed down as the `branch` prop, and persisted in the DB so it's
+    // restored automatically on refresh/relogin instead of resetting.
+    const effectiveBranch = branch || user.branch;
     const [products, setProducts] = useState([]);
     const [units, setUnits] = useState([]);
     const [form, setForm] = useState(EMPTY_FORM);
@@ -46,7 +51,7 @@ export default function ProductManagement() {
 
     const fetchProducts = async () => {
         try {
-            const res = await API.get('/products', { params: { branch: user.branch } });
+            const res = await API.get('/products', { params: effectiveBranch ? { branch: effectiveBranch } : {} });
             setProducts(res.data);
         } catch (err) {
             console.error('Failed to fetch products', err);
@@ -63,7 +68,8 @@ export default function ProductManagement() {
         }
     };
 
-    useEffect(() => { fetchProducts(); fetchUnits(); }, []);
+    // Re-fetch whenever the admin switches branch in the header
+    useEffect(() => { fetchProducts(); fetchUnits(); }, [effectiveBranch]);
 
     const selectedUnit = units.find((u) => u._id === form.unit);
     const unitAbbr = selectedUnit?.abbreviation || 'unit';
@@ -115,6 +121,7 @@ export default function ProductManagement() {
     }, [products, search, filterCategory, filterPackaging]);
 
     const openAddModal = () => {
+        if (!effectiveBranch) return toast.error('Select a branch first');
         setEditingId(null);
         setForm(EMPTY_FORM);
         if (fileRef.current) fileRef.current.value = '';
@@ -196,6 +203,7 @@ export default function ProductManagement() {
     };
 
     const saveItem = async () => {
+        if (!effectiveBranch) return toast.error('Select a branch first');
         if (!form.name || !form.sellingPrice || !form.unit) {
             return toast.error('Name, unit and selling price are required');
         }
@@ -220,7 +228,7 @@ export default function ProductManagement() {
                 caseBarcode: isBulk ? (form.caseBarcode || null) : null,
                 imageUrl: form.imageUrl || null,
                 imagePublicId: form.imagePublicId || null,
-                branch: user.branch,
+                branch: effectiveBranch,
             };
 
             if (editingId) {
@@ -356,6 +364,12 @@ export default function ProductManagement() {
                 </div>
             </div>
 
+            {branch !== undefined && !branch && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold rounded-xl px-4 py-3">
+                    You're viewing All Branches — pick a branch above to add products or receive stock.
+                </div>
+            )}
+
             <ProductStats stats={stats} />
 
             {showLowStockBanner && lowStockItems.length > 0 && (
@@ -449,4 +463,4 @@ export default function ProductManagement() {
             `}</style>
         </div>
     );
-            }
+        }
