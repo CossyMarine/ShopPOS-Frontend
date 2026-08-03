@@ -65,8 +65,8 @@ export default function CustomerPage() {
             {/* HEADER */}
             <header className="bg-white border-b border-stone-200 sticky top-0 z-20 px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center font-black text-lg text-white">B</div>
-                    <span className="font-black text-gray-900">Babylon Portal</span>
+                    
+                    <span className="font-black text-gray-900">Tendi Supermarket</span>
                 </div>
                 {isCustomer ? (
                     <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 px-2.5 py-1.5 rounded-xl">
