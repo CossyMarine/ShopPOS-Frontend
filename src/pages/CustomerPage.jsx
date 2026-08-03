@@ -134,7 +134,7 @@ export default function CustomerPage() {
                                 className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-gray-50 hover:bg-red-50 flex items-center justify-center z-10">
                                 <Heart size={13} className={favoriteIds.has(p._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'} />
                             </button>
-                            <div className="w-full h-20 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-2">
+                            <div className="w-full h-28 sm:h-36 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-2">
                                 {p.imageUrl ? (
                                     <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
                                 ) : (
