@@ -79,7 +79,7 @@ export default function CustomerPage() {
             </header>
 
             {/* QUICK BILL PAY BANNER */}
-            <div className="mx-4 mt-4 bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-5 text-white">
+            <div className="mx-4 mt-4 bg-gradient-to-r from-green-900 to-green-800 rounded-2xl p-5 text-white">
                 <span className="text-[10px] font-black uppercase tracking-widest text-orange-500">Quick Checkout</span>
                 <h2 className="text-lg font-black mt-1">Pay Your Store Bill</h2>
                 <p className="text-xs text-gray-300 mt-1 mb-3">Enter the receipt code from the cashier or display screen.</p>
