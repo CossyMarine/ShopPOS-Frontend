@@ -281,9 +281,15 @@ export default function CashierPage() {
                         <div className="grid grid-cols-3 xl:grid-cols-4 gap-2.5">
                             {visibleProducts.map((p) => {
                                 const stock = p.currentStock ?? 0;
+                                const qtyInCart = cart.find((i) => i.productId === p._id)?.quantity || 0;
                                 return (
                                     <button key={p._id} onClick={() => stock > 0 && addToCart(p)} disabled={stock <= 0}
-                                        className="text-left p-2.5 bg-white rounded-xl border border-gray-200 hover:border-brand-orange hover:shadow-md transition flex flex-col disabled:opacity-40">
+                                        className="relative text-left p-2.5 bg-white rounded-xl border border-gray-200 hover:border-brand-orange hover:shadow-md transition flex flex-col disabled:opacity-40">
+                                        {qtyInCart > 0 && (
+                                            <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-brand-orange text-white text-[11px] font-black flex items-center justify-center shadow-md ring-2 ring-white z-10">
+                                                {qtyInCart}
+                                            </span>
+                                        )}
                                         <div className="w-full h-16 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-1.5">
                                             {p.imageUrl ? (
                                                 <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
