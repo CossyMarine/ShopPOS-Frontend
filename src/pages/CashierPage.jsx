@@ -290,7 +290,7 @@ export default function CashierPage() {
                                                 {qtyInCart}
                                             </span>
                                         )}
-                                        <div className="w-full h-16 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-1.5">
+                                        <div className="w-full h-24 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-1.5">
                                             {p.imageUrl ? (
                                                 <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
                                             ) : (
