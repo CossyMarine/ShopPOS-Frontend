@@ -15,6 +15,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
     const [phone, setPhone] = useState('');
     const [processing, setProcessing] = useState(false);
     const [stkStatus, setStkStatus] = useState(null); // 'pending' | 'success' | 'failed'
+    const [closing, setClosing] = useState(false);
     const pollRef = useRef(null);
 
     // ---- "Both" combo: cash / till / reward entered together, any mix,
@@ -152,6 +153,33 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
         setAwardingReward(false);
     };
 
+    // ---- Closing before payment: this is what actually abandons the sale.
+    // If any amount was already applied (partial cash/till/reward), the bill
+    // is no longer "fully unpaid" — the backend will reject a plain cancel
+    // and this must go through the manager-approved void flow instead, so we
+    // warn accordingly rather than silently failing. If an M-Pesa prompt is
+    // mid-flight, cancel it first so it doesn't resolve into a stray payment
+    // after the bill's been voided. ----
+    const handleCloseClick = async () => {
+        if (receipt.amountPaid > 0) {
+            toast.error('This bill already has a partial payment — use a void request to cancel it, not close.');
+            return;
+        }
+        if (!window.confirm('Cancel this sale? Items will be released back to stock.')) return;
+
+        setClosing(true);
+        clearInterval(pollRef.current);
+        try {
+            if (stkStatus === 'pending') {
+                await API.post(`/receipts/${receipt._id}/mpesa/cancel`);
+            }
+        } catch {
+            // best-effort — the receipt-level cancel below still runs regardless
+        }
+        setClosing(false);
+        onClose();
+    };
+
     // ---- Post-payment: ask if the customer should be rewarded ----
     if (askReward) {
         return (
@@ -190,7 +218,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                         <h3 className="text-base font-black text-gray-800">{receipt.billId}</h3>
                         <p className="text-xs text-gray-500">Balance due: <span className="font-bold text-orange-500">KES {balanceDue.toLocaleString()}</span></p>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                    <button onClick={handleCloseClick} disabled={closing} className="text-gray-400 hover:text-gray-600 disabled:opacity-50"><X size={18} /></button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mb-4">
@@ -290,4 +318,4 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
             </div>
         </div>
     );
-}
+    }
