@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { toast } from 'react-toastify';
+import { Menu } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { BranchProvider, useBranch } from '../context/BranchContext';
 import API from '../api/axios';
@@ -35,6 +36,7 @@ function AdminInner() {
     const { selectedBranch } = useBranch();
     const [activeView, setActiveView] = useState('dashboard');
     const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const activeViewRef = useRef(activeView);
     activeViewRef.current = activeView;
 
@@ -90,10 +92,29 @@ function AdminInner() {
                 navItems={navItems}
                 title={user?.isAdmin ? 'Super Admin' : 'Branch Manager'}
                 extra={<BranchSelector />}
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
             />
-            <main className="flex-1 p-8 overflow-y-auto h-screen">
-                <ActiveComponent onPendingChange={fetchPendingCount} branch={selectedBranch} />
-            </main>
+
+            <div className="flex-1 flex flex-col h-screen overflow-hidden">
+                {/* Mobile topbar */}
+                <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
+                    <button
+                        onClick={() => setSidebarOpen(true)}
+                        className="text-gray-600 hover:text-brand-orange"
+                    >
+                        <Menu size={22} />
+                    </button>
+                    <span className="font-extrabold text-sm text-gray-900">
+                        Babylon<span className="text-brand-orange">POS</span>
+                    </span>
+                    <div className="w-6" /> {/* spacer for centering */}
+                </div>
+
+                <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+                    <ActiveComponent onPendingChange={fetchPendingCount} branch={selectedBranch} />
+                </main>
+            </div>
         </div>
     );
 }
