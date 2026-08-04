@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { toast } from 'react-toastify';
@@ -208,7 +208,19 @@ export default function CashierPage() {
         navigate('/login');
     };
 
-    const categories = ['All', ...new Set(products.map((p) => p.category))];
+    // Categories are derived from whatever products actually exist for this
+    // branch — never hardcoded, so new categories show up automatically.
+    const categories = useMemo(
+        () => ['All', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort()],
+        [products]
+    );
+
+    // Reset back to "All" if the currently selected category no longer exists
+    // (e.g. it was renamed/removed, or the branch's catalog changed).
+    useEffect(() => {
+        if (category !== 'All' && !categories.includes(category)) setCategory('All');
+    }, [categories, category]);
+
     const visibleProducts = category === 'All' ? products : products.filter((p) => p.category === category);
 
     if (shiftLoading) return <div className="h-screen flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
@@ -308,11 +320,17 @@ export default function CashierPage() {
                                 Add
                             </button>
                         </div>
-                        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+
+                        {/* CATEGORY FILTERS — built from live product data, not hardcoded */}
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 no-scrollbar">
                             {categories.map((c) => (
                                 <button key={c} onClick={() => setCategory(c)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${category === c ? 'bg-brand-orange text-white' : 'bg-gray-200 text-gray-700'}`}>
-                                    {c}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
+                                        category === c
+                                            ? 'bg-brand-orange text-white shadow-sm'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-brand-orange-light hover:text-brand-orange'
+                                    }`}>
+                                    {c === 'All' ? 'All Items' : c}
                                 </button>
                             ))}
                         </div>
