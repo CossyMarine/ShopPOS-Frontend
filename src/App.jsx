@@ -16,6 +16,7 @@ import ProfileDetailsPage from "./pages/ProfileDetailsPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import VerifyResetCode from "./pages/VerifyResetCode";
 import ResetPassword from "./pages/ResetPassword";
+import StaffPage from "./pages/StaffPage";
 
 function LoadingScreen() {
   return (
@@ -94,6 +95,14 @@ function AppRoutes() {
           element={
             <StaffRoute user={user} loading={loading} allow="storekeeper">
               <StorekeeperPage />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/staff"
+          element={
+            <StaffRoute user={user} loading={loading} allow="staff">
+              <StaffPage />
             </StaffRoute>
           }
         />
