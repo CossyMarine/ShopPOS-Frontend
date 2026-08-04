@@ -341,7 +341,7 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
             </div>
 
             <WageProfileModal
-                user={wageModalOpen ? { id: userId, fullName: user.fullName } : null}
+                user={wageModalOpen ? { id: userId, fullName: user.fullName, role: user.role} : null}
                 onClose={() => setWageModalOpen(false)}
                 onSaved={() => { fetchOverview(); onChanged?.(); }}
             />
