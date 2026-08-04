@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import ConfirmModal from './ConfirmModal';
 import WageProfileModal from './WageProfileModal';
+import LeaveApprovals from './LeaveApprovals';
 import { useBranch } from '../../context/BranchContext';
 
 const ROLE_OPTIONS = [
@@ -148,6 +149,8 @@ export default function StaffManagement() {
                 <h2 className="text-2xl font-black text-gray-800">Staff</h2>
                 <p className="text-sm text-gray-500">Cashiers, storekeepers, branch managers, and general staff across your stores</p>
             </div>
+
+            <LeaveApprovals />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* CREATE FORM — Super Admin only; a Branch Manager isn't allowed to mint new staff */}
@@ -317,4 +320,4 @@ export default function StaffManagement() {
             `}</style>
         </div>
     );
-        }
+    }
