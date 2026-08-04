@@ -1,6 +1,6 @@
 import {
     LayoutDashboard, Boxes, ReceiptText, CreditCard,
-    ShieldAlert, Users, Store, Settings, LogOut, X,
+    ShieldAlert, Users, Store, Settings, LogOut, X, Brain,
 } from 'lucide-react';
 
 export const ADMIN_NAV_ITEMS = [
@@ -10,6 +10,7 @@ export const ADMIN_NAV_ITEMS = [
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'voids', label: 'Void Requests', icon: ShieldAlert },
     { id: 'staff', label: 'Staff', icon: Users },
+    { id: 'ai-insights', label: 'AI Store Insights', icon: Brain },
     { id: 'branches', label: 'Branches', icon: Store },
     { id: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -125,4 +126,4 @@ export default function AdminSidebar({
             </aside>
         </>
     );
-}
+                }
