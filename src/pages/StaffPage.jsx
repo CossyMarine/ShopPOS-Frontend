@@ -1,11 +1,21 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, UserCircle2 } from 'lucide-react';
+import { LogOut, UserCircle2, Receipt } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import API from '../api/axios';
 import ClockWidget from '../components/Staff/ClockWidget';
+import LeavePanel from '../components/Staff/LeavePanel';
 
 export default function StaffPage() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const [payslips, setPayslips] = useState([]);
+
+    useEffect(() => {
+        API.get('/payroll/mine')
+            .then((res) => setPayslips(res.data))
+            .catch((err) => console.error('Failed to load payslips', err));
+    }, []);
 
     const handleLogout = async () => {
         await logout();
@@ -38,8 +48,25 @@ export default function StaffPage() {
 
             <div className="p-4 sm:p-6 space-y-4 max-w-2xl mx-auto">
                 <ClockWidget />
+                <LeavePanel />
 
-                {/* Next up: attendance history, leave requests, own payslips */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+                    <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2 mb-3">
+                        <Receipt size={16} className="text-brand-orange" /> My Payslips
+                    </h3>
+                    {payslips.length === 0 ? (
+                        <p className="text-xs text-gray-400">No paid payslips yet</p>
+                    ) : (
+                        payslips.map((p) => (
+                            <div key={p._id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                                <span className="text-xs font-bold text-gray-700">{p.period}</span>
+                                <span className="text-xs font-black text-brand-orange">
+                                    {Math.round(p.netPayable).toLocaleString()} KES
+                                </span>
+                            </div>
+                        ))
+                    )}
+                </div>
             </div>
         </div>
     );
