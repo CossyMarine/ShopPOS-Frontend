@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Heart, Search, Coins, Receipt, Store, ShoppingBag } from 'lucide-react';
@@ -15,6 +15,7 @@ export default function CustomerPage() {
     const [favoriteIds, setFavoriteIds] = useState(new Set());
     const [tab, setTab] = useState('all'); // 'all' | 'favorites'
     const [search, setSearch] = useState('');
+    const [category, setCategory] = useState('All');
     const [wallet, setWallet] = useState(null);
     const [billId, setBillId] = useState('');
 
@@ -56,8 +57,22 @@ export default function CustomerPage() {
         }
     };
 
+    // Categories are derived from whatever products actually exist for the
+    // selected branch — never hardcoded, so new categories show up automatically.
+    const categories = useMemo(
+        () => ['All', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort()],
+        [products]
+    );
+
+    // Reset back to "All" if the currently selected category no longer exists
+    // (e.g. after switching branches to one that doesn't stock it).
+    useEffect(() => {
+        if (category !== 'All' && !categories.includes(category)) setCategory('All');
+    }, [categories, category]);
+
     const visible = products
         .filter((p) => (tab === 'favorites' ? favoriteIds.has(p._id) : true))
+        .filter((p) => category === 'All' || p.category === category)
         .filter((p) => !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
 
     return (
@@ -121,6 +136,20 @@ export default function CustomerPage() {
                     <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…"
                         className="w-full pl-9 pr-3 py-2.5 bg-white border border-stone-200 rounded-xl text-sm focus:outline-none focus:border-orange-500" />
                 </div>
+
+                {/* CATEGORY FILTERS — built from live product data, not hardcoded */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                    {categories.map((c) => (
+                        <button key={c} onClick={() => setCategory(c)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
+                                category === c
+                                    ? 'bg-orange-500 text-white shadow-sm'
+                                    : 'bg-white border border-stone-200 text-gray-600 hover:bg-orange-50 hover:text-orange-600'
+                            }`}>
+                            {c === 'All' ? 'All Items' : c}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* CATALOG GRID */}
@@ -152,4 +181,4 @@ export default function CustomerPage() {
             <BottomNav />
         </div>
     );
-                        }
+            }
