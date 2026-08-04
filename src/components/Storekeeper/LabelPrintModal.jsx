@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { X, Printer } from 'lucide-react';
+import { X, Printer, Store, ChevronDown } from 'lucide-react';
 import API from '../../api/axios';
+import { useBranch } from '../../context/BranchContext';
 
 // Physical size of the thermal label roll. Change this if your printer uses
 // a different label size — it's the only "layout" constant in this file.
 const LABEL_WIDTH_MM = 50;
 
 // Picks the correct barcode symbology for the value instead of forcing
-// everything through CODE128. This is what makes the printed barcode look
-// like a real retail barcode (EAN-13 for 13-digit codes, UPC for 12, etc.)
-// with properly spaced digits, instead of a generic squeezed-looking one.
+// everything through CODE128 — proper module/digit spacing per format.
 function detectBarcodeFormat(value) {
   if (/^\d{13}$/.test(value)) return 'EAN13';
   if (/^\d{12}$/.test(value)) return 'UPC';
@@ -24,8 +23,6 @@ function BarcodeSvg({ value, className }) {
   useEffect(() => {
     if (!value || !ref.current) return;
     const format = detectBarcodeFormat(value);
-    // Wider bars for short numeric codes so the digits underneath have room
-    // to breathe; narrower for long/alphanumeric codes so they still fit.
     const moduleWidth = value.length > 13 ? 1.6 : 2.4;
 
     const opts = {
@@ -43,8 +40,6 @@ function BarcodeSvg({ value, className }) {
     try {
       JsBarcode(ref.current, value, opts);
     } catch {
-      // Falls back to CODE128 if the value isn't valid for the detected
-      // format (e.g. a 13-digit code that fails the EAN-13 checksum)
       JsBarcode(ref.current, value, { ...opts, format: 'CODE128' });
     }
   }, [value]);
@@ -73,16 +68,31 @@ function LabelCard({ product, storeName }) {
 }
 
 export default function LabelPrintModal({ product, onClose }) {
-  const [storeName, setStoreName] = useState('');
-  const [loadingSettings, setLoadingSettings] = useState(true);
+  const { isAdmin, branches, selectedBranch } = useBranch();
+
+  // Admin: pick which branch's name prints on the label (defaults to
+  // whatever they currently have selected, or the first branch on record).
+  const [adminBranchId, setAdminBranchId] = useState(selectedBranch || '');
+  // Storekeeper/cashier/manager: resolved automatically from their own account.
+  const [myBranchName, setMyBranchName] = useState('');
+  const [loadingBranch, setLoadingBranch] = useState(true);
   const [copies, setCopies] = useState(1);
 
   useEffect(() => {
-    API.get('/settings')
-      .then((res) => setStoreName(res.data.storeName || ''))
-      .catch(() => setStoreName(''))
-      .finally(() => setLoadingSettings(false));
-  }, []);
+    if (isAdmin) {
+      if (!adminBranchId && branches.length > 0) setAdminBranchId(branches[0]._id);
+      setLoadingBranch(false);
+      return;
+    }
+    API.get('/branches/mine')
+      .then((res) => setMyBranchName(res.data?.name || ''))
+      .catch(() => setMyBranchName(''))
+      .finally(() => setLoadingBranch(false));
+  }, [isAdmin, branches, adminBranchId]);
+
+  const storeName = isAdmin
+    ? branches.find((b) => b._id === adminBranchId)?.name || 'Select a branch'
+    : myBranchName || 'Your Branch';
 
   const copyCount = Math.min(Math.max(parseInt(copies, 10) || 1, 1), 100);
   const handlePrint = () => product.barcode && window.print();
@@ -100,12 +110,32 @@ export default function LabelPrintModal({ product, onClose }) {
         </div>
 
         <div className="space-y-4">
-          {loadingSettings ? (
+          {isAdmin && (
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Branch</label>
+              <div className="relative">
+                <Store size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-orange pointer-events-none" />
+                <select
+                  value={adminBranchId}
+                  onChange={(e) => setAdminBranchId(e.target.value)}
+                  className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 pl-8 pr-7 py-2.5 focus:outline-none focus:bg-white focus:border-brand-orange transition cursor-pointer"
+                >
+                  {branches.length === 0 && <option value="">No branches found</option>}
+                  {branches.map((b) => (
+                    <option key={b._id} value={b._id}>{b.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+          )}
+
+          {loadingBranch ? (
             <div className="w-64 mx-auto h-32 flex items-center justify-center text-xs text-gray-400">
               Loading label…
             </div>
           ) : (
-            <LabelCard product={product} storeName={storeName || 'Your Store'} />
+            <LabelCard product={product} storeName={storeName} />
           )}
 
           <div>
@@ -128,7 +158,7 @@ export default function LabelPrintModal({ product, onClose }) {
             </button>
             <button
               onClick={handlePrint}
-              disabled={!product.barcode}
+              disabled={!product.barcode || (isAdmin && !adminBranchId)}
               className="px-5 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-extrabold rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
             >
               <Printer size={14} />
@@ -138,13 +168,11 @@ export default function LabelPrintModal({ product, onClose }) {
         </div>
       </div>
 
-      {/* Print-only area — repeats the label "copies" times so the printer
-          feeds one label per copy instead of only ever printing one */}
       <div className="print-only">
         {product.barcode &&
           Array.from({ length: copyCount }).map((_, i) => (
             <div className="print-page" key={i}>
-              <LabelCard product={product} storeName={storeName || 'Your Store'} />
+              <LabelCard product={product} storeName={storeName} />
             </div>
           ))}
       </div>
