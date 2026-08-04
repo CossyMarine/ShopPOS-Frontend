@@ -34,7 +34,9 @@ export default function DashboardOverview({ branch } = {}) {
     const [paid, setPaid] = useState([]);
     const [voidCount, setVoidCount] = useState(0);
     const [stats, setStats] = useState({
-        hourlyTrend: [],
+        dailyTrend: [],
+        monthRevenue: 0,
+        monthReceiptsCount: 0,
         paymentBreakdown: [],
         categoryBreakdown: [],
         lowStockCount: 0,
@@ -98,24 +100,15 @@ export default function DashboardOverview({ branch } = {}) {
         });
     }, [unpaid, paid, dateFrom, dateTo]);
 
+    // When no date filter is applied, the stat card shows this month's
+    // total (Kenyan calendar month, from dashboard-stats). Otherwise it
+    // shows the sum of paid receipts within the picked range.
     const filteredRevenue = useMemo(() => {
-        if (!dateFrom && !dateTo) return revenueToday.totalRevenue;
+        if (!dateFrom && !dateTo) return stats.monthRevenue;
         return combined
             .filter((r) => r.status === 'paid')
             .reduce((sum, r) => sum + r.subtotal, 0);
-    }, [combined, dateFrom, dateTo, revenueToday]);
-
-    // Trim the 24-hour trend down to the active trading window, so the chart
-    // doesn't render a wall of empty overnight bars.
-    const dailyTrend = useMemo(() => {
-        const active = stats.hourlyTrend
-            .map((h, i) => (h.revenue > 0 ? i : null))
-            .filter((i) => i !== null);
-        if (active.length === 0) return stats.hourlyTrend.slice(8, 21); // fallback: 8AM–8PM
-        const start = Math.max(0, Math.min(...active) - 1);
-        const end = Math.min(23, Math.max(...active) + 1);
-        return stats.hourlyTrend.slice(start, end + 1);
-    }, [stats.hourlyTrend]);
+    }, [combined, dateFrom, dateTo, stats.monthRevenue]);
 
     const paymentChartData = useMemo(
         () => stats.paymentBreakdown.map((p) => ({
@@ -176,12 +169,12 @@ export default function DashboardOverview({ branch } = {}) {
                 </div>
             </div>
 
-            {/* STAT CARDS — matches mockup: Today's Sales / Net Profit / Refunds & Voids / Low Stock */}
+            {/* STAT CARDS — matches mockup: This Month's Sales / Net Profit / Refunds & Voids / Low Stock */}
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <StatCard
                     icon={Wallet}
                     iconBg="bg-brand-orange-light text-brand-orange"
-                    label={dateFrom || dateTo ? "Sales (filtered)" : "Today's Sales"}
+                    label={dateFrom || dateTo ? "Sales (filtered)" : "This Month's Sales"}
                     value={`KES ${filteredRevenue.toLocaleString()}`}
                     sub={`${combined.length} receipts`}
                     subColor="text-green-600"
@@ -212,12 +205,12 @@ export default function DashboardOverview({ branch } = {}) {
                 />
             </section>
 
-            {/* DAILY SALES REVENUE CHART */}
+            {/* DAILY SALES REVENUE CHART — one bar per day of the current month */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
                     <div>
                         <h3 className="font-bold text-gray-900">Daily Sales Revenue</h3>
-                        <p className="text-xs text-gray-500">Hourly sales performance for the selected branch</p>
+                        <p className="text-xs text-gray-500">Day-by-day sales performance for this month</p>
                     </div>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-orange-light text-brand-orange">
                         Live Revenue (KES)
@@ -225,7 +218,7 @@ export default function DashboardOverview({ branch } = {}) {
                 </div>
                 <div className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={dailyTrend}>
+                        <BarChart data={stats.dailyTrend}>
                             <CartesianGrid vertical={false} stroke="#F1F5F9" />
                             <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
                             <YAxis
@@ -253,12 +246,12 @@ export default function DashboardOverview({ branch } = {}) {
                             <p className="text-xs text-gray-500">Sales volume by Cash, M-Pesa STK, and Card</p>
                         </div>
                         <span className="text-xs font-medium text-brand-orange bg-brand-orange-light px-3 py-1 rounded-full">
-                            Today
+                            This Month
                         </span>
                     </div>
                     <div className="h-64 w-full">
                         {paymentChartData.length === 0 ? (
-                            <EmptyChartState label="No payments recorded yet today" />
+                            <EmptyChartState label="No payments recorded yet this month" />
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
@@ -289,12 +282,12 @@ export default function DashboardOverview({ branch } = {}) {
                             <p className="text-xs text-gray-500">Top selling product categories across branches</p>
                         </div>
                         <span className="text-xs font-medium text-brand-orange bg-brand-orange-light px-3 py-1 rounded-full">
-                            Today
+                            This Month
                         </span>
                     </div>
                     <div className="h-64 w-full">
                         {categoryChartData.length === 0 ? (
-                            <EmptyChartState label="No sales recorded yet today" />
+                            <EmptyChartState label="No sales recorded yet this month" />
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
@@ -448,4 +441,4 @@ function EmptyChartState({ label }) {
             {label}
         </div>
     );
-                                    }
+                                        }
