@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { LogOut, UserCircle2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ProductManagement from "../components/Storekeeper/ProductManagement";
+import ClockWidget from "../components/Staff/ClockWidget";
+import LeavePanel from "../components/Staff/LeavePanel";
 
 export default function StorekeeperPage() {
   const navigate = useNavigate();
@@ -31,7 +33,9 @@ export default function StorekeeperPage() {
         </div>
       </header>
 
-      <div className="p-4 sm:p-6">
+      <div className="p-4 sm:p-6 space-y-4">
+        <ClockWidget />
+        <LeavePanel />
         <ProductManagement />
       </div>
     </div>
