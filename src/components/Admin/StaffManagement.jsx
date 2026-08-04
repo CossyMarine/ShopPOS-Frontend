@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, ShieldCheck, Ban, CheckCircle2, RefreshCw, Users2 } from 'lucide-react';
+import { UserPlus, ShieldCheck, Ban, CheckCircle2, RefreshCw, Users2, Wallet } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import ConfirmModal from './ConfirmModal';
+import WageProfileModal from './WageProfileModal';
 import { useBranch } from '../../context/BranchContext';
 
 const ROLE_OPTIONS = [
@@ -10,6 +11,7 @@ const ROLE_OPTIONS = [
     { value: 'branchManager', label: 'Branch Manager' },
     { value: 'cashier', label: 'Cashier' },
     { value: 'storekeeper', label: 'Storekeeper' },
+    { value: 'staff', label: 'Staff' },
 ];
 
 const FILTER_TABS = [
@@ -25,6 +27,7 @@ const emptyForm = (defaultBranch) => ({
     password: '',
     role: 'cashier',
     branch: defaultBranch || '',
+    jobTitle: '',
 });
 
 export default function StaffManagement() {
@@ -38,6 +41,7 @@ export default function StaffManagement() {
     const [roleChange, setRoleChange] = useState(null); // { user, newRole, branch }
     const [statusChange, setStatusChange] = useState(null); // user
     const [working, setWorking] = useState(false);
+    const [wageEditUser, setWageEditUser] = useState(null); // user whose wage profile is being edited
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -92,6 +96,7 @@ export default function StaffManagement() {
                 isAdmin: form.role === 'admin',
                 role: form.role === 'admin' ? undefined : form.role,
                 branch: form.role === 'admin' ? undefined : form.branch,
+                jobTitle: form.role === 'staff' ? form.jobTitle : undefined,
             });
             toast.success('Staff account created');
             setForm(emptyForm(isAdmin ? '' : selectedBranch));
@@ -104,12 +109,14 @@ export default function StaffManagement() {
     };
 
     const confirmRoleChange = async () => {
-        const { user, newRole, branch } = roleChange;
+        const { user, newRole, branch, jobTitle } = roleChange;
         if (newRole !== 'admin' && !branch) return toast.error('Select a branch for this role');
         setWorking(true);
         try {
             const payload =
-                newRole === 'admin' ? { isAdmin: true } : { isAdmin: false, role: newRole, branch };
+                newRole === 'admin'
+                    ? { isAdmin: true }
+                    : { isAdmin: false, role: newRole, branch, jobTitle: newRole === 'staff' ? jobTitle : undefined };
             await API.patch(`/auth/users/${user.id}/role`, payload);
             toast.success(`${user.fullName} is now ${ROLE_OPTIONS.find((r) => r.value === newRole)?.label}`);
             setRoleChange(null);
@@ -139,7 +146,7 @@ export default function StaffManagement() {
         <div className="space-y-8">
             <div>
                 <h2 className="text-2xl font-black text-gray-800">Staff</h2>
-                <p className="text-sm text-gray-500">Cashiers, storekeepers, and branch managers across your stores</p>
+                <p className="text-sm text-gray-500">Cashiers, storekeepers, branch managers, and general staff across your stores</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -165,6 +172,10 @@ export default function StaffManagement() {
                             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="input">
                                 {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                             </select>
+                            {form.role === 'staff' && (
+                                <input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
+                                    placeholder="Job title (e.g. Shelf Stocker, Cleaner)" className="input" />
+                            )}
                             {form.role !== 'admin' && (
                                 <select value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} className="input">
                                     <option value="">Select branch</option>
@@ -222,13 +233,15 @@ export default function StaffManagement() {
                                                 {isAdmin && u.role !== 'customer' ? (
                                                     <select
                                                         value={currentRoleValue(u)}
-                                                        onChange={(e) => setRoleChange({ user: u, newRole: e.target.value, branch: u.branch?._id || u.branch || '' })}
+                                                        onChange={(e) => setRoleChange({ user: u, newRole: e.target.value, branch: u.branch?._id || u.branch || '', jobTitle: u.jobTitle || '' })}
                                                         className="text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1"
                                                     >
                                                         {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                                                     </select>
                                                 ) : (
-                                                    <span className="text-xs font-bold text-gray-600">{roleLabel(u)}</span>
+                                                    <span className="text-xs font-bold text-gray-600">
+                                                        {roleLabel(u)}{u.role === 'staff' && u.jobTitle ? ` · ${u.jobTitle}` : ''}
+                                                    </span>
                                                 )}
                                             </td>
                                             <td className="px-4 py-3 text-xs text-gray-500">{u.isAdmin ? 'All Branches' : branchName(u) || '—'}</td>
@@ -237,7 +250,12 @@ export default function StaffManagement() {
                                                     {u.isActive ? 'Active' : 'Deactivated'}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="px-4 py-3 text-right space-x-1">
+                                                {u.role !== 'customer' && !u.isAdmin && (
+                                                    <button onClick={() => setWageEditUser(u)} className="text-gray-400 hover:text-orange-500 p-1.5" title="Wage settings">
+                                                        <Wallet size={15} />
+                                                    </button>
+                                                )}
                                                 {u.role !== 'customer' || u.isAdmin ? (
                                                     <button onClick={() => setStatusChange(u)} className="text-gray-400 hover:text-red-500 p-1.5" title={u.isActive ? 'Deactivate' : 'Reactivate'}>
                                                         {u.isActive ? <Ban size={15} /> : <CheckCircle2 size={15} />}
@@ -260,6 +278,10 @@ export default function StaffManagement() {
                     roleChange && (
                         <div className="space-y-3 text-left">
                             <p>{`Set ${roleChange.user.fullName}'s role to ${ROLE_OPTIONS.find((r) => r.value === roleChange.newRole)?.label}?`}</p>
+                            {roleChange.newRole === 'staff' && (
+                                <input value={roleChange.jobTitle} onChange={(e) => setRoleChange({ ...roleChange, jobTitle: e.target.value })}
+                                    placeholder="Job title (e.g. Shelf Stocker, Cleaner)" className="input" />
+                            )}
                             {roleChange.newRole !== 'admin' && (
                                 <select value={roleChange.branch} onChange={(e) => setRoleChange({ ...roleChange, branch: e.target.value })}
                                     className="input">
@@ -287,10 +309,12 @@ export default function StaffManagement() {
                 onClose={() => setStatusChange(null)}
             />
 
+            <WageProfileModal user={wageEditUser} onClose={() => setWageEditUser(null)} />
+
             <style>{`
                 .input { width: 100%; background: rgb(249 250 251); border: 1px solid rgb(229 231 235); border-radius: 0.75rem; padding: 0.55rem 0.75rem; font-size: 0.8rem; }
                 .input:focus { outline: none; border-color: rgb(249 115 22); background: white; }
             `}</style>
         </div>
     );
-                          }
+        }
