@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Save, RefreshCw, Landmark, MessageCircle, Gift } from 'lucide-react';
+import { Save, RefreshCw, Store, Landmark, MessageCircle, Gift } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 
 const EMPTY = {
+    storeName: '',
     tillNumber: '',
     tillName: '',
     whatsappNumber: '',
@@ -27,6 +28,7 @@ export default function SettingsManagement() {
         try {
             const res = await API.get('/settings');
             setForm({
+                storeName: res.data.storeName || '',
                 tillNumber: res.data.tillNumber || '',
                 tillName: res.data.tillName || '',
                 whatsappNumber: res.data.whatsappNumber || '',
@@ -73,7 +75,7 @@ export default function SettingsManagement() {
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-black text-gray-800">Settings</h2>
-                    <p className="text-sm text-gray-500">Payment channels, contact numbers, and the reward program</p>
+                    <p className="text-sm text-gray-500">Store details, payment channels, contact numbers, and the reward program</p>
                 </div>
                 <button
                     onClick={fetchSettings}
@@ -88,6 +90,20 @@ export default function SettingsManagement() {
                 {/* Payment & contact */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-5">
                     <h3 className="text-base font-black text-gray-800 border-b border-gray-100 pb-3 flex items-center gap-2">
+                        <Store size={16} className="text-orange-500" />
+                        Store Details
+                    </h3>
+                    <Field label="Store Name">
+                        <input
+                            value={form.storeName}
+                            onChange={(e) => setForm({ ...form, storeName: e.target.value })}
+                            placeholder="e.g. Babylon Supermarket"
+                            className="input"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">Printed on barcode labels and receipts</p>
+                    </Field>
+
+                    <h3 className="text-base font-black text-gray-800 border-b border-gray-100 pb-3 pt-2 flex items-center gap-2">
                         <Landmark size={16} className="text-orange-500" />
                         Manual Till Payment
                     </h3>
