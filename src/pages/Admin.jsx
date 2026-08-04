@@ -16,6 +16,7 @@ import VoidRequestsView from '../components/Admin/VoidRequestsView';
 import StaffManagement from '../components/Admin/StaffManagement';
 import BranchesManagement from '../components/Admin/BranchesManagement';
 import SettingsManagement from '../components/Admin/SettingsManagement';
+import AiInsights from '../components/Admin/AiInsights';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
@@ -26,6 +27,7 @@ const VIEWS = {
     payments: PaymentsView,
     voids: VoidRequestsView,
     staff: StaffManagement,
+    'ai-insights': AiInsights,
     branches: BranchesManagement,
     settings: SettingsManagement,
 };
