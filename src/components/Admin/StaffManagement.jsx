@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, Ban, CheckCircle2, RefreshCw, Users2, Wallet, Percent, FileText, Search } from 'lucide-react';
+import { UserPlus, Ban, CheckCircle2, RefreshCw, Users2, Wallet, Percent, FileText, Search, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import ConfirmModal from './ConfirmModal';
@@ -8,6 +8,8 @@ import AddStaffModal from './AddStaffModal';
 import DeductionsModal from './DeductionsModal';
 import PayslipModal from './PayslipModal';
 import LeaveApprovals from './LeaveApprovals';
+import StaffDetailView from './StaffDetailView';
+import GlobalPayoutModal from './GlobalPayoutModal';
 import { useBranch } from '../../context/BranchContext';
 
 const ROLE_OPTIONS = [
@@ -35,11 +37,13 @@ export default function StaffManagement() {
 
     const [addStaffOpen, setAddStaffOpen] = useState(false);
     const [deductionsOpen, setDeductionsOpen] = useState(false);
+    const [globalPayoutOpen, setGlobalPayoutOpen] = useState(false);
     const [payslipUser, setPayslipUser] = useState(null);
     const [roleChange, setRoleChange] = useState(null);
     const [statusChange, setStatusChange] = useState(null);
     const [working, setWorking] = useState(false);
     const [wageEditUser, setWageEditUser] = useState(null);
+    const [selectedStaffId, setSelectedStaffId] = useState(null); // tap-to-open detail page
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -146,6 +150,17 @@ export default function StaffManagement() {
         return <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{Number(profile.monthlySalary || 0).toLocaleString()} KES/mo</span>;
     };
 
+    // Tap-to-open: staff/admin rows open the detail page; customer rows don't have one.
+    if (selectedStaffId) {
+        return (
+            <StaffDetailView
+                userId={selectedStaffId}
+                onBack={() => setSelectedStaffId(null)}
+                onChanged={() => { fetchUsers(); fetchWageProfiles(); }}
+            />
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -157,6 +172,10 @@ export default function StaffManagement() {
                     <button onClick={() => setDeductionsOpen(true)}
                         className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 hover:border-orange-400 text-gray-700 text-xs font-extrabold rounded-xl shadow-sm transition">
                         <Percent size={15} className="text-orange-500" /> Deductions
+                    </button>
+                    <button onClick={() => setGlobalPayoutOpen(true)}
+                        className="flex items-center gap-2 px-3.5 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-extrabold rounded-xl shadow-sm transition">
+                        <Send size={15} /> Global Payout
                     </button>
                     {isAdmin && (
                         <button onClick={() => setAddStaffOpen(true)}
@@ -253,53 +272,59 @@ export default function StaffManagement() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {visibleUsers.map((u) => (
-                                    <tr key={u.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3 font-bold text-gray-800">
-                                            {u.fullName}
-                                            <p className="text-[11px] text-gray-400 font-normal">{u.email || u.phone}</p>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {isAdmin && u.role !== 'customer' ? (
-                                                <select
-                                                    value={currentRoleValue(u)}
-                                                    onChange={(e) => setRoleChange({ user: u, newRole: e.target.value, branch: u.branch?._id || u.branch || '', jobTitle: u.jobTitle || '' })}
-                                                    className="text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1"
-                                                >
-                                                    {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                                                </select>
-                                            ) : (
-                                                <span className="text-xs font-bold text-gray-600">
-                                                    {roleLabel(u)}{u.role === 'staff' && u.jobTitle ? ` · ${u.jobTitle}` : ''}
+                                {visibleUsers.map((u) => {
+                                    const canOpenDetail = u.role !== 'customer';
+                                    return (
+                                        <tr key={u.id}
+                                            onClick={() => canOpenDetail && setSelectedStaffId(u.id)}
+                                            className={`hover:bg-gray-50 ${canOpenDetail ? 'cursor-pointer' : ''}`}
+                                            title={canOpenDetail ? 'View staff details' : undefined}>
+                                            <td className="px-4 py-3 font-bold text-gray-800">
+                                                {u.fullName}
+                                                <p className="text-[11px] text-gray-400 font-normal">{u.email || u.phone}</p>
+                                            </td>
+                                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                {isAdmin && u.role !== 'customer' ? (
+                                                    <select
+                                                        value={currentRoleValue(u)}
+                                                        onChange={(e) => setRoleChange({ user: u, newRole: e.target.value, branch: u.branch?._id || u.branch || '', jobTitle: u.jobTitle || '' })}
+                                                        className="text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1"
+                                                    >
+                                                        {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                                    </select>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-gray-600">
+                                                        {roleLabel(u)}{u.role === 'staff' && u.jobTitle ? ` · ${u.jobTitle}` : ''}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 text-xs text-gray-500">{u.isAdmin ? 'All Branches' : branchName(u) || '—'}</td>
+                                            <td className="px-4 py-3">{u.role !== 'customer' ? wageBadge(u) : <span className="text-[10px] text-gray-300">—</span>}</td>
+                                            <td className="px-4 py-3">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                                    {u.isActive ? 'Active' : 'Deactivated'}
                                                 </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-xs text-gray-500">{u.isAdmin ? 'All Branches' : branchName(u) || '—'}</td>
-                                        <td className="px-4 py-3">{u.role !== 'customer' ? wageBadge(u) : <span className="text-[10px] text-gray-300">—</span>}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                                {u.isActive ? 'Active' : 'Deactivated'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-right space-x-1">
-                                            {u.role !== 'customer' && !u.isAdmin && (
-                                                <>
-                                                    <button onClick={() => setWageEditUser(u)} className="text-gray-400 hover:text-orange-500 p-1.5" title="Wage settings">
-                                                        <Wallet size={15} />
+                                            </td>
+                                            <td className="px-4 py-3 text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                                                {u.role !== 'customer' && !u.isAdmin && (
+                                                    <>
+                                                        <button onClick={() => setWageEditUser(u)} className="text-gray-400 hover:text-orange-500 p-1.5" title="Wage settings">
+                                                            <Wallet size={15} />
+                                                        </button>
+                                                        <button onClick={() => setPayslipUser(u)} className="text-gray-400 hover:text-green-600 p-1.5" title="Run payroll">
+                                                            <FileText size={15} />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                {u.role !== 'customer' || u.isAdmin ? (
+                                                    <button onClick={() => setStatusChange(u)} className="text-gray-400 hover:text-red-500 p-1.5" title={u.isActive ? 'Deactivate' : 'Reactivate'}>
+                                                        {u.isActive ? <Ban size={15} /> : <CheckCircle2 size={15} />}
                                                     </button>
-                                                    <button onClick={() => setPayslipUser(u)} className="text-gray-400 hover:text-green-600 p-1.5" title="Run payroll">
-                                                        <FileText size={15} />
-                                                    </button>
-                                                </>
-                                            )}
-                                            {u.role !== 'customer' || u.isAdmin ? (
-                                                <button onClick={() => setStatusChange(u)} className="text-gray-400 hover:text-red-500 p-1.5" title={u.isActive ? 'Deactivate' : 'Reactivate'}>
-                                                    {u.isActive ? <Ban size={15} /> : <CheckCircle2 size={15} />}
-                                                </button>
-                                            ) : null}
-                                        </td>
-                                    </tr>
-                                ))}
+                                                ) : null}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -309,6 +334,13 @@ export default function StaffManagement() {
             <AddStaffModal open={addStaffOpen} onClose={() => setAddStaffOpen(false)} onCreated={fetchUsers} />
 
             <DeductionsModal open={deductionsOpen} onClose={() => { setDeductionsOpen(false); fetchDeductions(); }} staffList={staffUsers} />
+
+            <GlobalPayoutModal
+                open={globalPayoutOpen}
+                onClose={() => setGlobalPayoutOpen(false)}
+                staffUsers={staffUsers}
+                onCompleted={() => { fetchWageProfiles(); }}
+            />
 
             <PayslipModal employee={payslipUser} onClose={() => setPayslipUser(null)} />
 
@@ -358,4 +390,4 @@ export default function StaffManagement() {
             `}</style>
         </div>
     );
-}
+                        }
