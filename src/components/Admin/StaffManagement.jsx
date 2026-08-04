@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, ShieldCheck, Ban, CheckCircle2, RefreshCw, Users2, Wallet } from 'lucide-react';
+import { UserPlus, Ban, CheckCircle2, RefreshCw, Users2, Wallet, Percent, FileText, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import ConfirmModal from './ConfirmModal';
 import WageProfileModal from './WageProfileModal';
+import AddStaffModal from './AddStaffModal';
+import DeductionsModal from './DeductionsModal';
+import PayslipModal from './PayslipModal';
 import LeaveApprovals from './LeaveApprovals';
 import { useBranch } from '../../context/BranchContext';
 
@@ -21,28 +24,22 @@ const FILTER_TABS = [
     { value: 'customer', label: 'Customers' },
 ];
 
-const emptyForm = (defaultBranch) => ({
-    fullName: '',
-    method: 'email',
-    contact: '',
-    password: '',
-    role: 'cashier',
-    branch: defaultBranch || '',
-    jobTitle: '',
-});
-
 export default function StaffManagement() {
-    // `branch` here is the Admin page's selected-branch filter (null = All Branches)
     const { branches, selectedBranch, isAdmin } = useBranch();
     const [users, setUsers] = useState([]);
+    const [wageProfiles, setWageProfiles] = useState([]);
+    const [deductions, setDeductions] = useState([]);
     const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
-    const [form, setForm] = useState(emptyForm(isAdmin ? '' : selectedBranch));
-    const [creating, setCreating] = useState(false);
-    const [roleChange, setRoleChange] = useState(null); // { user, newRole, branch }
-    const [statusChange, setStatusChange] = useState(null); // user
+
+    const [addStaffOpen, setAddStaffOpen] = useState(false);
+    const [deductionsOpen, setDeductionsOpen] = useState(false);
+    const [payslipUser, setPayslipUser] = useState(null);
+    const [roleChange, setRoleChange] = useState(null);
+    const [statusChange, setStatusChange] = useState(null);
     const [working, setWorking] = useState(false);
-    const [wageEditUser, setWageEditUser] = useState(null); // user whose wage profile is being edited
+    const [wageEditUser, setWageEditUser] = useState(null);
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -56,8 +53,31 @@ export default function StaffManagement() {
         setLoading(false);
     };
 
-    useEffect(() => { fetchUsers(); }, []);
-    useEffect(() => { setForm(emptyForm(isAdmin ? '' : selectedBranch)); }, [isAdmin, selectedBranch]);
+    const fetchWageProfiles = async () => {
+        try {
+            const res = await API.get('/wages');
+            setWageProfiles(res.data);
+        } catch (err) {
+            console.error('Failed to fetch wage profiles', err);
+        }
+    };
+
+    const fetchDeductions = async () => {
+        try {
+            const res = await API.get('/deductions');
+            setDeductions(res.data);
+        } catch (err) {
+            console.error('Failed to fetch deductions', err);
+        }
+    };
+
+    useEffect(() => { fetchUsers(); fetchWageProfiles(); fetchDeductions(); }, []);
+
+    const wageByUser = wageProfiles.reduce((acc, p) => {
+        const uid = p.user?._id || p.user;
+        if (uid) acc[String(uid)] = p;
+        return acc;
+    }, {});
 
     const roleLabel = (u) => {
         if (u.isAdmin) return 'Super Admin';
@@ -66,48 +86,22 @@ export default function StaffManagement() {
     const currentRoleValue = (u) => (u.isAdmin ? 'admin' : u.role);
     const branchName = (u) => branches.find((b) => b._id === (u.branch?._id || u.branch))?.name;
 
-    // Branch Manager view is filtered to their own branch's staff (selectedBranch
-    // is always their own branch for a non-admin, see BranchContext); Super
-    // Admin sees everyone unless they've picked one branch from the selector.
     const visibleUsers = users.filter((u) => {
         if (selectedBranch && String(u.branch?._id || u.branch) !== String(selectedBranch) && !u.isAdmin) return false;
-        if (filter === 'staff') return u.isAdmin || u.role !== 'customer';
-        if (filter === 'customer') return !u.isAdmin && u.role === 'customer';
+        if (filter === 'staff' && !(u.isAdmin || u.role !== 'customer')) return false;
+        if (filter === 'customer' && !(!u.isAdmin && u.role === 'customer')) return false;
+        if (search) {
+            const q = search.toLowerCase();
+            const haystack = `${u.fullName} ${u.email || ''} ${u.phone || ''} ${u.jobTitle || ''} ${roleLabel(u)}`.toLowerCase();
+            if (!haystack.includes(q)) return false;
+        }
         return true;
     });
 
-    const handleCreate = async () => {
-        if (!form.fullName || !form.contact || !form.password) {
-            return toast.error('Fill in all fields');
-        }
-        if (form.password.length < 6) {
-            return toast.error('Password must be at least 6 characters');
-        }
-        if (form.role !== 'admin' && !form.branch) {
-            return toast.error('Select a branch for this role');
-        }
-
-        setCreating(true);
-        try {
-            await API.post('/auth/register', {
-                fullName: form.fullName,
-                method: form.method,
-                contact: form.contact,
-                password: form.password,
-                isAdmin: form.role === 'admin',
-                role: form.role === 'admin' ? undefined : form.role,
-                branch: form.role === 'admin' ? undefined : form.branch,
-                jobTitle: form.role === 'staff' ? form.jobTitle : undefined,
-            });
-            toast.success('Staff account created');
-            setForm(emptyForm(isAdmin ? '' : selectedBranch));
-            fetchUsers();
-        } catch (err) {
-            console.error('Failed to create user', err);
-            toast.error(err.response?.data?.message || 'Failed to create account');
-        }
-        setCreating(false);
-    };
+    const staffUsers = users.filter((u) => u.isAdmin || u.role !== 'customer');
+    const configuredCount = staffUsers.filter((u) => wageByUser[u.id]).length;
+    const noSalaryCount = staffUsers.filter((u) => wageByUser[u.id]?.noSalary).length;
+    const activeDeductionsCount = deductions.filter((d) => d.isActive).length;
 
     const confirmRoleChange = async () => {
         const { user, newRole, branch, jobTitle } = roleChange;
@@ -143,136 +137,180 @@ export default function StaffManagement() {
         setWorking(false);
     };
 
+    const wageBadge = (u) => {
+        const profile = wageByUser[u.id];
+        if (!profile) return <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Not set</span>;
+        if (profile.noSalary) return <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">Unpaid</span>;
+        if (profile.wageType === 'hourly') return <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{profile.hourlyRate} KES/hr</span>;
+        if (profile.wageType === 'daily') return <span className="text-[10px] font-extrabold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">{profile.dailyRateWeekday} KES/day</span>;
+        return <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">{Number(profile.monthlySalary || 0).toLocaleString()} KES/mo</span>;
+    };
+
     return (
-        <div className="space-y-8">
-            <div>
-                <h2 className="text-2xl font-black text-gray-800">Staff</h2>
-                <p className="text-sm text-gray-500">Cashiers, storekeepers, branch managers, and general staff across your stores</p>
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 className="text-2xl font-black text-gray-800">Staff</h2>
+                    <p className="text-sm text-gray-500">Cashiers, storekeepers, branch managers, and general staff across your stores</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => setDeductionsOpen(true)}
+                        className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 hover:border-orange-400 text-gray-700 text-xs font-extrabold rounded-xl shadow-sm transition">
+                        <Percent size={15} className="text-orange-500" /> Deductions
+                    </button>
+                    {isAdmin && (
+                        <button onClick={() => setAddStaffOpen(true)}
+                            className="flex items-center gap-2 px-3.5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-extrabold rounded-xl shadow-sm transition">
+                            <UserPlus size={15} /> Add Staff
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Total Staff</span>
+                        <p className="text-xl font-black text-gray-900 mt-0.5">{staffUsers.length}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center text-lg">
+                        <Users2 size={18} />
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Wage Configured</span>
+                        <p className="text-xl font-black text-indigo-600 mt-0.5">{configuredCount}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+                        <Wallet size={18} />
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Unpaid / No Salary</span>
+                        <p className="text-xl font-black text-purple-600 mt-0.5">{noSalaryCount}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-lg">
+                        <Users2 size={18} />
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Active Deductions</span>
+                        <p className="text-xl font-black text-green-600 mt-0.5">{activeDeductionsCount}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-lg">
+                        <Percent size={18} />
+                    </div>
+                </div>
             </div>
 
             <LeaveApprovals />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* CREATE FORM — Super Admin only; a Branch Manager isn't allowed to mint new staff */}
-                {isAdmin && (
-                    <div className="bg-white border border-gray-200 rounded-2xl p-6 h-fit shadow-sm">
-                        <h3 className="text-base font-black text-gray-800 border-b border-gray-100 pb-3 mb-4 flex items-center gap-2">
-                            <UserPlus size={18} className="text-orange-500" /> Add Staff
-                        </h3>
-                        <div className="space-y-3">
-                            <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                                placeholder="Full name" className="input" />
-                            <div className="flex gap-2">
-                                <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className="input w-28">
-                                    <option value="email">Email</option>
-                                    <option value="phone">Phone</option>
-                                </select>
-                                <input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })}
-                                    placeholder={form.method === 'email' ? 'name@store.com' : '2547...'} className="input flex-1" />
-                            </div>
-                            <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                placeholder="Temporary password" className="input" />
-                            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="input">
-                                {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                            </select>
-                            {form.role === 'staff' && (
-                                <input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
-                                    placeholder="Job title (e.g. Shelf Stocker, Cleaner)" className="input" />
-                            )}
-                            {form.role !== 'admin' && (
-                                <select value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} className="input">
-                                    <option value="">Select branch</option>
-                                    {branches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
-                                </select>
-                            )}
-                            <button onClick={handleCreate} disabled={creating}
-                                className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">
-                                {creating ? 'Creating…' : 'Create Account'}
-                            </button>
-                        </div>
-                    </div>
-                )}
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center">
+                <div className="relative w-full md:w-80">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                        <Search size={13} />
+                    </span>
+                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search staff, role, email…"
+                        className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-orange-400 transition" />
+                </div>
 
-                {/* LIST */}
-                <div className={isAdmin ? 'lg:col-span-2' : 'lg:col-span-3'}>
-                    <div className="flex items-center gap-2 mb-4">
-                        {FILTER_TABS.map((t) => (
-                            <button key={t.value} onClick={() => setFilter(t.value)}
-                                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                                    filter === t.value ? 'bg-orange-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-orange-400'
-                                }`}>
-                                {t.label}
-                            </button>
-                        ))}
-                        <button onClick={fetchUsers} className="ml-auto text-gray-400 hover:text-orange-500 p-1.5" title="Refresh">
-                            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                <div className="flex items-center gap-2">
+                    {FILTER_TABS.map((t) => (
+                        <button key={t.value} onClick={() => setFilter(t.value)}
+                            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                                filter === t.value ? 'bg-orange-500 text-white' : 'bg-gray-50 border border-gray-200 text-gray-600 hover:border-orange-400'
+                            }`}>
+                            {t.label}
                         </button>
-                    </div>
+                    ))}
+                    <button onClick={() => { fetchUsers(); fetchWageProfiles(); }} className="text-gray-400 hover:text-orange-500 p-1.5" title="Refresh">
+                        <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+            </div>
 
-                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                        {visibleUsers.length === 0 ? (
-                            <div className="py-14 text-center text-gray-400">
-                                <Users2 size={28} className="mx-auto mb-2 text-gray-300" />
-                                <p className="text-sm font-medium">No users found</p>
-                            </div>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold border-b border-gray-200">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left">Name</th>
-                                        <th className="px-4 py-3 text-left">Role</th>
-                                        <th className="px-4 py-3 text-left">Branch</th>
-                                        <th className="px-4 py-3 text-left">Status</th>
-                                        <th className="px-4 py-3 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {visibleUsers.map((u) => (
-                                        <tr key={u.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 font-bold text-gray-800">{u.fullName}
-                                                <p className="text-[11px] text-gray-400 font-normal">{u.email || u.phone}</p>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {isAdmin && u.role !== 'customer' ? (
-                                                    <select
-                                                        value={currentRoleValue(u)}
-                                                        onChange={(e) => setRoleChange({ user: u, newRole: e.target.value, branch: u.branch?._id || u.branch || '', jobTitle: u.jobTitle || '' })}
-                                                        className="text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1"
-                                                    >
-                                                        {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                                                    </select>
-                                                ) : (
-                                                    <span className="text-xs font-bold text-gray-600">
-                                                        {roleLabel(u)}{u.role === 'staff' && u.jobTitle ? ` · ${u.jobTitle}` : ''}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 text-xs text-gray-500">{u.isAdmin ? 'All Branches' : branchName(u) || '—'}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                                    {u.isActive ? 'Active' : 'Deactivated'}
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                {visibleUsers.length === 0 ? (
+                    <div className="py-14 text-center text-gray-400">
+                        <Users2 size={28} className="mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm font-medium">No users found</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 text-xs text-gray-500 uppercase font-semibold border-b border-gray-200">
+                                <tr>
+                                    <th className="px-4 py-3 text-left">Employee Info</th>
+                                    <th className="px-4 py-3 text-left">Role</th>
+                                    <th className="px-4 py-3 text-left">Branch</th>
+                                    <th className="px-4 py-3 text-left">Wage Configuration</th>
+                                    <th className="px-4 py-3 text-left">Status</th>
+                                    <th className="px-4 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {visibleUsers.map((u) => (
+                                    <tr key={u.id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3 font-bold text-gray-800">
+                                            {u.fullName}
+                                            <p className="text-[11px] text-gray-400 font-normal">{u.email || u.phone}</p>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {isAdmin && u.role !== 'customer' ? (
+                                                <select
+                                                    value={currentRoleValue(u)}
+                                                    onChange={(e) => setRoleChange({ user: u, newRole: e.target.value, branch: u.branch?._id || u.branch || '', jobTitle: u.jobTitle || '' })}
+                                                    className="text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1"
+                                                >
+                                                    {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                                                </select>
+                                            ) : (
+                                                <span className="text-xs font-bold text-gray-600">
+                                                    {roleLabel(u)}{u.role === 'staff' && u.jobTitle ? ` · ${u.jobTitle}` : ''}
                                                 </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right space-x-1">
-                                                {u.role !== 'customer' && !u.isAdmin && (
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-xs text-gray-500">{u.isAdmin ? 'All Branches' : branchName(u) || '—'}</td>
+                                        <td className="px-4 py-3">{u.role !== 'customer' ? wageBadge(u) : <span className="text-[10px] text-gray-300">—</span>}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                                {u.isActive ? 'Active' : 'Deactivated'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right space-x-1">
+                                            {u.role !== 'customer' && !u.isAdmin && (
+                                                <>
                                                     <button onClick={() => setWageEditUser(u)} className="text-gray-400 hover:text-orange-500 p-1.5" title="Wage settings">
                                                         <Wallet size={15} />
                                                     </button>
-                                                )}
-                                                {u.role !== 'customer' || u.isAdmin ? (
-                                                    <button onClick={() => setStatusChange(u)} className="text-gray-400 hover:text-red-500 p-1.5" title={u.isActive ? 'Deactivate' : 'Reactivate'}>
-                                                        {u.isActive ? <Ban size={15} /> : <CheckCircle2 size={15} />}
+                                                    <button onClick={() => setPayslipUser(u)} className="text-gray-400 hover:text-green-600 p-1.5" title="Run payroll">
+                                                        <FileText size={15} />
                                                     </button>
-                                                ) : null}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
+                                                </>
+                                            )}
+                                            {u.role !== 'customer' || u.isAdmin ? (
+                                                <button onClick={() => setStatusChange(u)} className="text-gray-400 hover:text-red-500 p-1.5" title={u.isActive ? 'Deactivate' : 'Reactivate'}>
+                                                    {u.isActive ? <Ban size={15} /> : <CheckCircle2 size={15} />}
+                                                </button>
+                                            ) : null}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                </div>
+                )}
             </div>
+
+            <AddStaffModal open={addStaffOpen} onClose={() => setAddStaffOpen(false)} onCreated={fetchUsers} />
+
+            <DeductionsModal open={deductionsOpen} onClose={() => { setDeductionsOpen(false); fetchDeductions(); }} staffList={staffUsers} />
+
+            <PayslipModal employee={payslipUser} onClose={() => setPayslipUser(null)} />
 
             <ConfirmModal
                 open={!!roleChange}
@@ -312,7 +350,7 @@ export default function StaffManagement() {
                 onClose={() => setStatusChange(null)}
             />
 
-            <WageProfileModal user={wageEditUser} onClose={() => setWageEditUser(null)} />
+            <WageProfileModal user={wageEditUser} onClose={() => setWageEditUser(null)} onSaved={fetchWageProfiles} />
 
             <style>{`
                 .input { width: 100%; background: rgb(249 250 251); border: 1px solid rgb(229 231 235); border-radius: 0.75rem; padding: 0.55rem 0.75rem; font-size: 0.8rem; }
@@ -320,4 +358,4 @@ export default function StaffManagement() {
             `}</style>
         </div>
     );
-    }
+}
