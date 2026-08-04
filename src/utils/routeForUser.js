@@ -8,5 +8,6 @@ export function routeForUser(user) {
   if (user.role === "branchManager") return "/manager";
   if (user.role === "cashier") return "/cashier";
   if (user.role === "storekeeper") return "/storekeeper";
+  if (user.role === "staff") return "/staff";
   return "/home"; // customer
 }
