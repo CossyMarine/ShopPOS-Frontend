@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, Ban, CheckCircle2, RefreshCw, Users2, Wallet, Percent, FileText, Search, Send } from 'lucide-react';
+import { UserPlus, Ban, CheckCircle2, RefreshCw, Users2, Wallet, Percent, FileText, Search, Send, Settings } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import ConfirmModal from './ConfirmModal';
@@ -10,6 +10,8 @@ import PayslipModal from './PayslipModal';
 import LeaveApprovals from './LeaveApprovals';
 import StaffDetailView from './StaffDetailView';
 import GlobalPayoutModal from './GlobalPayoutModal';
+import PayrollDefaultsModal from './PayrollDefaultsModal';
+import PayrollInsightCard from './PayrollInsightCard';
 import { useBranch } from '../../context/BranchContext';
 
 const ROLE_OPTIONS = [
@@ -31,6 +33,8 @@ export default function StaffManagement() {
     const [users, setUsers] = useState([]);
     const [wageProfiles, setWageProfiles] = useState([]);
     const [deductions, setDeductions] = useState([]);
+    const [summary, setSummary] = useState(null);
+    const [dueToday, setDueToday] = useState([]);
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(false);
@@ -38,6 +42,7 @@ export default function StaffManagement() {
     const [addStaffOpen, setAddStaffOpen] = useState(false);
     const [deductionsOpen, setDeductionsOpen] = useState(false);
     const [globalPayoutOpen, setGlobalPayoutOpen] = useState(false);
+    const [defaultsOpen, setDefaultsOpen] = useState(false);
     const [payslipUser, setPayslipUser] = useState(null);
     const [roleChange, setRoleChange] = useState(null);
     const [statusChange, setStatusChange] = useState(null);
@@ -75,7 +80,25 @@ export default function StaffManagement() {
         }
     };
 
-    useEffect(() => { fetchUsers(); fetchWageProfiles(); fetchDeductions(); }, []);
+    const fetchSummary = async () => {
+        try {
+            const res = await API.get('/payroll/summary');
+            setSummary(res.data);
+        } catch (err) {
+            console.error('Failed to fetch payroll summary', err);
+        }
+    };
+
+    const fetchDueToday = async () => {
+        try {
+            const res = await API.get('/payroll/due-today');
+            setDueToday(res.data.due || []);
+        } catch (err) {
+            console.error('Failed to fetch due payouts', err);
+        }
+    };
+
+    useEffect(() => { fetchUsers(); fetchWageProfiles(); fetchDeductions(); fetchSummary(); fetchDueToday(); }, []);
 
     const wageByUser = wageProfiles.reduce((acc, p) => {
         const uid = p.user?._id || p.user;
@@ -156,7 +179,7 @@ export default function StaffManagement() {
             <StaffDetailView
                 userId={selectedStaffId}
                 onBack={() => setSelectedStaffId(null)}
-                onChanged={() => { fetchUsers(); fetchWageProfiles(); }}
+                onChanged={() => { fetchUsers(); fetchWageProfiles(); fetchSummary(); fetchDueToday(); }}
             />
         );
     }
@@ -169,6 +192,10 @@ export default function StaffManagement() {
                     <p className="text-sm text-gray-500">Cashiers, storekeepers, branch managers, and general staff across your stores</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button onClick={() => setDefaultsOpen(true)}
+                        className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 hover:border-orange-400 text-gray-700 text-xs font-extrabold rounded-xl shadow-sm transition">
+                        <Settings size={15} className="text-orange-500" /> Payroll Defaults
+                    </button>
                     <button onClick={() => setDeductionsOpen(true)}
                         className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 hover:border-orange-400 text-gray-700 text-xs font-extrabold rounded-xl shadow-sm transition">
                         <Percent size={15} className="text-orange-500" /> Deductions
@@ -186,7 +213,20 @@ export default function StaffManagement() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {dueToday.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p className="text-sm font-extrabold text-amber-800">{dueToday.length} staff due for payout today</p>
+                        <p className="text-xs text-amber-700">{dueToday.map((d) => d.fullName).join(', ')}</p>
+                    </div>
+                    <button onClick={() => setGlobalPayoutOpen(true)}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold rounded-xl">
+                        Review & Disburse
+                    </button>
+                </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
                     <div>
                         <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Total Staff</span>
@@ -223,9 +263,18 @@ export default function StaffManagement() {
                         <Percent size={18} />
                     </div>
                 </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Paid This Month</span>
+                    <p className="text-lg font-black text-green-600 mt-0.5">
+                        {summary ? `${summary.totalPaidThisMonth.toLocaleString()} KES` : '—'}
+                    </p>
+                    <span className="text-[10px] text-gray-400">{summary?.payoutsThisMonth ?? 0} payouts</span>
+                </div>
             </div>
 
             <LeaveApprovals />
+
+            <PayrollInsightCard />
 
             <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center">
                 <div className="relative w-full md:w-80">
@@ -246,7 +295,7 @@ export default function StaffManagement() {
                             {t.label}
                         </button>
                     ))}
-                    <button onClick={() => { fetchUsers(); fetchWageProfiles(); }} className="text-gray-400 hover:text-orange-500 p-1.5" title="Refresh">
+                    <button onClick={() => { fetchUsers(); fetchWageProfiles(); fetchSummary(); fetchDueToday(); }} className="text-gray-400 hover:text-orange-500 p-1.5" title="Refresh">
                         <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
                     </button>
                 </div>
@@ -339,10 +388,16 @@ export default function StaffManagement() {
                 open={globalPayoutOpen}
                 onClose={() => setGlobalPayoutOpen(false)}
                 staffUsers={staffUsers}
-                onCompleted={() => { fetchWageProfiles(); }}
+                onCompleted={() => { fetchWageProfiles(); fetchSummary(); fetchDueToday(); }}
             />
 
-            <PayslipModal employee={payslipUser} onClose={() => setPayslipUser(null)} />
+            <PayrollDefaultsModal
+                open={defaultsOpen}
+                onClose={() => { setDefaultsOpen(false); fetchDueToday(); }}
+                branchId={!isAdmin ? selectedBranch : null}
+            />
+
+            <PayslipModal employee={payslipUser} onClose={() => { setPayslipUser(null); fetchSummary(); fetchDueToday(); }} />
 
             <ConfirmModal
                 open={!!roleChange}
@@ -382,7 +437,7 @@ export default function StaffManagement() {
                 onClose={() => setStatusChange(null)}
             />
 
-            <WageProfileModal user={wageEditUser} onClose={() => setWageEditUser(null)} onSaved={fetchWageProfiles} />
+            <WageProfileModal user={wageEditUser} onClose={() => setWageEditUser(null)} onSaved={() => { fetchWageProfiles(); fetchDueToday(); }} />
 
             <style>{`
                 .input { width: 100%; background: rgb(249 250 251); border: 1px solid rgb(229 231 235); border-radius: 0.75rem; padding: 0.55rem 0.75rem; font-size: 0.8rem; }
@@ -390,4 +445,4 @@ export default function StaffManagement() {
             `}</style>
         </div>
     );
-                        }
+            }
