@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Send, X, Users2, Wallet, CheckCircle2, Clock3, RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
+import ConfirmModal from './ConfirmModal';
 import { useBranch } from '../../context/BranchContext';
 import { buildDeductionOptions, currentPeriod, money, PAYROLL_ROLE_OPTIONS } from '../../utils/payroll';
 
@@ -19,6 +20,7 @@ export default function GlobalPayoutModal({ open, onClose, staffUsers = [], onCo
     const [summaryLoading, setSummaryLoading] = useState(false);
     const [running, setRunning] = useState(false);
     const [confirming, setConfirming] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
     const [result, setResult] = useState(null);
 
     useEffect(() => {
@@ -26,7 +28,11 @@ export default function GlobalPayoutModal({ open, onClose, staffUsers = [], onCo
         setResult(null);
         setBranch(isAdmin ? (selectedBranch || '') : '');
         API.get('/deductions').then((res) => setDeductions(res.data || [])).catch(() => {});
-    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [open, isAdmin, selectedBranch]);
+
+    // Filters changed after a run — the visible payslip list would otherwise
+    // keep showing results from the old role/branch/period selection.
+    const clearStaleResult = () => setResult(null);
 
     const fetchSummary = useCallback(() => {
         if (!open) return;
@@ -97,9 +103,12 @@ export default function GlobalPayoutModal({ open, onClose, staffUsers = [], onCo
             toast.error(err.response?.data?.message || 'Failed to disburse payouts');
         }
         setConfirming(false);
+        setConfirmOpen(false);
     };
 
-    const pendingCount = (result?.payslips || []).filter((p) => p.status === 'pending').length;
+    const pendingPayslips = (result?.payslips || []).filter((p) => p.status === 'pending');
+    const pendingCount = pendingPayslips.length;
+    const pendingTotal = pendingPayslips.reduce((s, p) => s + p.netPayable, 0);
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -119,13 +128,13 @@ export default function GlobalPayoutModal({ open, onClose, staffUsers = [], onCo
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">Period</span>
-                            <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+                            <input type="month" value={period} onChange={(e) => { setPeriod(e.target.value); clearStaleResult(); }}
                                 className="w-full bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold px-3 py-2" />
                         </div>
                         {isAdmin && (
                             <div>
                                 <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">Branch</span>
-                                <select value={branch} onChange={(e) => setBranch(e.target.value)}
+                                <select value={branch} onChange={(e) => { setBranch(e.target.value); clearStaleResult(); }}
                                     className="w-full bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold px-3 py-2">
                                     <option value="">All Branches</option>
                                     {branches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
@@ -138,7 +147,7 @@ export default function GlobalPayoutModal({ open, onClose, staffUsers = [], onCo
                         <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">Role</span>
                         <div className="flex flex-wrap gap-2">
                             {PAYROLL_ROLE_OPTIONS.map((r) => (
-                                <button key={r.value} onClick={() => setRole(r.value)}
+                                <button key={r.value} onClick={() => { setRole(r.value); clearStaleResult(); }}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
                                         role === r.value ? 'bg-orange-500 text-white' : 'bg-gray-50 border border-gray-200 text-gray-600 hover:border-orange-400'
                                     }`}>
@@ -264,15 +273,25 @@ export default function GlobalPayoutModal({ open, onClose, staffUsers = [], onCo
                             )}
 
                             {pendingCount > 0 && (
-                                <button onClick={confirmAll} disabled={confirming}
+                                <button onClick={() => setConfirmOpen(true)} disabled={confirming}
                                     className="w-full py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-extrabold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
-                                    <Send size={15} /> {confirming ? 'Disbursing…' : `Confirm & Disburse All (${pendingCount})`}
+                                    <Send size={15} /> Confirm & Disburse All ({pendingCount})
                                 </button>
                             )}
                         </div>
                     )}
                 </div>
+
+                <ConfirmModal
+                    open={confirmOpen}
+                    title={`Disburse ${pendingCount} payout${pendingCount === 1 ? '' : 's'}?`}
+                    description={`This pays out ${money(pendingTotal)} across ${pendingCount} staff member${pendingCount === 1 ? '' : 's'} for ${period}. This can't be undone from here.`}
+                    confirmLabel="Disburse All"
+                    loading={confirming}
+                    onConfirm={confirmAll}
+                    onClose={() => setConfirmOpen(false)}
+                />
             </div>
         </div>
     );
-          }
+}
