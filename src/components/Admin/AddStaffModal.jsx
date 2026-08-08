@@ -15,6 +15,7 @@ const ROLE_OPTIONS = [
 const emptyForm = (defaultBranch) => ({
     fullName: '', method: 'email', contact: '', password: '',
     role: 'cashier', branch: defaultBranch || '', jobTitle: '',
+    employmentStartDate: '',
 });
 
 export default function AddStaffModal({ open, onClose, onCreated }) {
@@ -40,6 +41,7 @@ export default function AddStaffModal({ open, onClose, onCreated }) {
                 role: form.role === 'admin' ? undefined : form.role,
                 branch: form.role === 'admin' ? undefined : form.branch,
                 jobTitle: form.role === 'staff' ? form.jobTitle : undefined,
+                employmentStartDate: form.employmentStartDate || undefined,
             });
             toast.success('Staff account created');
             setForm(emptyForm(isAdmin ? '' : selectedBranch));
@@ -88,6 +90,14 @@ export default function AddStaffModal({ open, onClose, onCreated }) {
                             {branches.map((b) => <option key={b._id} value={b._id}>{b.name}</option>)}
                         </select>
                     )}
+                    {form.role !== 'admin' && (
+                        <div>
+                            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">Start date</span>
+                            <input type="date" value={form.employmentStartDate}
+                                onChange={(e) => setForm({ ...form, employmentStartDate: e.target.value })} className="input" />
+                            <p className="text-[10px] text-gray-400 mt-1">Defaults to today if left blank — used for daily-interval payday counting.</p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="pt-4 mt-4 flex justify-end gap-2 border-t border-gray-100">
@@ -102,4 +112,4 @@ export default function AddStaffModal({ open, onClose, onCreated }) {
             </div>
         </div>
     );
-}
+                  }
