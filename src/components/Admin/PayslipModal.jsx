@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FileText, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
+import ConfirmModal from './ConfirmModal';
 
 const currentPeriod = () => {
     const d = new Date();
@@ -13,8 +14,14 @@ export default function PayslipModal({ employee, onClose }) {
     const [slip, setSlip] = useState(null);
     const [running, setRunning] = useState(false);
     const [confirming, setConfirming] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     if (!employee) return null;
+
+    const handlePeriodChange = (val) => {
+        setPeriod(val);
+        setSlip(null); // don't show stale numbers from the previous period
+    };
 
     const runPayroll = async () => {
         setRunning(true);
@@ -38,6 +45,7 @@ export default function PayslipModal({ employee, onClose }) {
             toast.error(err.response?.data?.message || 'Failed to disburse payout');
         }
         setConfirming(false);
+        setConfirmOpen(false);
     };
 
     const row = (label, value, tone = 'text-gray-900') => (
@@ -58,7 +66,7 @@ export default function PayslipModal({ employee, onClose }) {
                 </div>
 
                 <div className="flex gap-2 mb-4">
-                    <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)}
+                    <input type="month" value={period} onChange={(e) => handlePeriodChange(e.target.value)}
                         className="flex-1 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold px-3 py-2" />
                     <button onClick={runPayroll} disabled={running}
                         className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-extrabold rounded-xl disabled:opacity-50">
@@ -96,15 +104,25 @@ export default function PayslipModal({ employee, onClose }) {
                             }`}>{slip.status.toUpperCase()}</span>
 
                             {slip.status === 'pending' && (
-                                <button onClick={disburse} disabled={confirming}
+                                <button onClick={() => setConfirmOpen(true)} disabled={confirming}
                                     className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-extrabold rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50">
-                                    <Send size={13} /> {confirming ? 'Disbursing…' : 'Disburse Payout'}
+                                    <Send size={13} /> Disburse Payout
                                 </button>
                             )}
                         </div>
                     </div>
                 )}
+
+                <ConfirmModal
+                    open={confirmOpen}
+                    title="Disburse this payout?"
+                    description={slip ? `Pay ${employee.fullName} ${Math.round(slip.netPayable).toLocaleString()} KES for ${period}? This marks the payslip as paid.` : ''}
+                    confirmLabel="Disburse"
+                    loading={confirming}
+                    onConfirm={disburse}
+                    onClose={() => setConfirmOpen(false)}
+                />
             </div>
         </div>
     );
-}
+                }
