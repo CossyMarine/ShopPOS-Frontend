@@ -3,6 +3,7 @@ import { Wallet, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import { buildDeductionOptions } from '../../utils/payroll';
+import WageRateFields from './WageRateFields';
 
 const empty = {
     wageType: 'hourly',
@@ -12,6 +13,9 @@ const empty = {
     paymentMethod: 'mpesa', applyStatutoryDeductions: true,
     selectedDeductions: [],
     noSalary: false,
+    useOrgDefaultRate: true,
+    schedule: { shiftStart: null, shiftEnd: null, disburseAfterHours: null, intervalDays: null, payDay: null },
+    employmentStartDate: '',
 };
 
 export default function WageProfileModal({ user, onClose, onSaved }) {
@@ -26,7 +30,12 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
 
         setLoading(true);
         API.get(`/wages/${user.id}`)
-            .then((res) => setForm(res.data ? { ...empty, ...res.data } : empty))
+            .then((res) => setForm(res.data ? {
+                ...empty,
+                ...res.data,
+                schedule: { ...empty.schedule, ...(res.data.schedule || {}) },
+                employmentStartDate: res.data.employmentStartDate ? res.data.employmentStartDate.slice(0, 10) : '',
+            } : empty))
             .catch(() => toast.error('Failed to load wage profile'))
             .finally(() => setLoading(false));
 
@@ -98,53 +107,44 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
                         </label>
 
                         <div className={form.noSalary ? 'opacity-40 pointer-events-none space-y-3' : 'space-y-3'}>
-                            <div>
-                                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">How they're paid</span>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {['hourly', 'daily', 'monthly'].map((t) => (
-                                        <button key={t} onClick={() => setForm({ ...form, wageType: t })}
-                                            className={`py-2 rounded-xl text-xs font-extrabold border transition ${form.wageType === t ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-orange-300'}`}>
-                                            {t[0].toUpperCase() + t.slice(1)}
-                                        </button>
-                                    ))}
+                            <label className="flex items-center justify-between bg-blue-50 border border-blue-200 p-3 rounded-xl">
+                                <div>
+                                    <span className="text-xs font-bold text-gray-800 block">Use org default rate</span>
+                                    <span className="text-[10px] text-gray-500">Off to set a custom rate &amp; schedule for {user.fullName} only</span>
                                 </div>
-                            </div>
+                                <input type="checkbox" checked={form.useOrgDefaultRate}
+                                    onChange={(e) => setForm({ ...form, useOrgDefaultRate: e.target.checked })}
+                                    className="w-4 h-4 accent-blue-600 shrink-0 ml-3" />
+                            </label>
 
-                            {form.wageType === 'hourly' && (
-                                <div className="space-y-1.5">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <input type="number" placeholder="Rate per hour (KES)" value={form.hourlyRate}
-                                            onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })} className="input" />
-                                        <input type="number" step="0.1" placeholder="Overtime multiplier" value={form.overtimeMultiplier}
-                                            onChange={(e) => setForm({ ...form, overtimeMultiplier: e.target.value })} className="input" />
+                            {form.useOrgDefaultRate ? (
+                                // Still need the wage type picked, since it determines
+                                // which of hourly/daily/monthly attendance data feeds
+                                // this person's payroll — just not the rate itself.
+                                <div>
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">How they're paid</span>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {['hourly', 'daily', 'monthly'].map((t) => (
+                                            <button key={t} type="button" onClick={() => setForm({ ...form, wageType: t })}
+                                                className={`py-2 rounded-xl text-xs font-extrabold border transition ${form.wageType === t ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-orange-300'}`}>
+                                                {t[0].toUpperCase() + t.slice(1)}
+                                            </button>
+                                        ))}
                                     </div>
-                                    <p className="text-[10px] text-gray-400 px-0.5">
-                                        Paid on shift/attendance hours actually logged. Overtime kicks in automatically past 8 hours in a single shift, at the multiplier above.
+                                    <p className="text-[10px] text-gray-400 px-0.5 mt-1.5">
+                                        Rate and schedule are pulled from the org/branch default and update automatically if that changes.
                                     </p>
                                 </div>
+                            ) : (
+                                <WageRateFields form={form} setForm={setForm} showCommissionNote={commissionNote} />
                             )}
+
                             {form.wageType === 'daily' && (
-                                <div className="space-y-1.5">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <input type="number" placeholder="Weekday rate (KES)" value={form.dailyRateWeekday}
-                                            onChange={(e) => setForm({ ...form, dailyRateWeekday: e.target.value })} className="input" />
-                                        <input type="number" placeholder="Weekend rate (KES)" value={form.dailyRateWeekend}
-                                            onChange={(e) => setForm({ ...form, dailyRateWeekend: e.target.value })} className="input" />
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 px-0.5">
-                                        Paid per day attended, using whichever rate matches the day of the week.
-                                    </p>
-                                </div>
-                            )}
-                            {form.wageType === 'monthly' && (
-                                <div className="space-y-1.5">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <input type="number" placeholder="Monthly gross (KES)" value={form.monthlySalary}
-                                            onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })} className="input" />
-                                        <input type="number" step="0.1" placeholder="Commission % (cashiers only)" value={form.commissionRate}
-                                            onChange={(e) => setForm({ ...form, commissionRate: e.target.value })} className="input" />
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 leading-snug px-0.5">{commissionNote}</p>
+                                <div>
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">Start date</span>
+                                    <input type="date" value={form.employmentStartDate}
+                                        onChange={(e) => setForm({ ...form, employmentStartDate: e.target.value })} className="input" />
+                                    <p className="text-[10px] text-gray-400 px-0.5 mt-1">Used to count the pay interval — leave blank to use when they were added to the system.</p>
                                 </div>
                             )}
 
@@ -213,4 +213,4 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
             </div>
         </div>
     );
-}
+                        }
