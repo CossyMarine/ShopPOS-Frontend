@@ -1,10 +1,11 @@
 import {
     LayoutDashboard, Boxes, ReceiptText, CreditCard,
-    ShieldAlert, Users, Store, Settings, LogOut, X, Brain,
+    ShieldAlert, Users, Store, Settings, LogOut, X, Brain, BarChart3,
 } from 'lucide-react';
 
 export const ADMIN_NAV_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'products', label: 'Products & Stock', icon: Boxes },
     { id: 'orders', label: 'Sales & Receipts', icon: ReceiptText },
     { id: 'payments', label: 'Payments', icon: CreditCard },
