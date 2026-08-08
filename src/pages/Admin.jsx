@@ -17,11 +17,13 @@ import StaffManagement from '../components/Admin/StaffManagement';
 import BranchesManagement from '../components/Admin/BranchesManagement';
 import SettingsManagement from '../components/Admin/SettingsManagement';
 import AiInsights from '../components/Admin/AiInsights';
+import AnalyticsPage from '../components/Admin/AnalyticsPage';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 const VIEWS = {
     dashboard: DashboardOverview,
+    analytics: AnalyticsPage,
     products: ProductManagement,
     orders: OrdersLedger,
     payments: PaymentsView,
