@@ -34,7 +34,16 @@ export default function PrintReceipt({ receipt }) {
             ))}
 
             <p>-------------------------------------</p>
-            <p>Subtotal                 KES {receipt.subtotal}</p>
+            {receipt.vatEnabled ? (
+                <>
+                    <p>Subtotal                 KES {receipt.subtotal}</p>
+                    <p>VAT ({receipt.vatRate}%)               KES {receipt.vatAmount}</p>
+                    <p>-------------------------------------</p>
+                    <p className="font-bold">TOTAL                    KES {receipt.totalDue}</p>
+                </>
+            ) : (
+                <p className="font-bold">TOTAL                    KES {receipt.totalDue}</p>
+            )}
             {receipt.amountPaid && (
                 <>
                     <p>Amount Paid              KES {receipt.amountPaid}</p>
