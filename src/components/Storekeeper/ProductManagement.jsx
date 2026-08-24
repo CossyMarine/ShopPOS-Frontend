@@ -148,6 +148,7 @@ export default function ProductManagement({ branch }) {
             casePrice: item.casePrice ?? '',
             imageUrl: item.imageUrl || '',
             imagePublicId: item.imagePublicId || '',
+            vatClass: item.vatClass || 'standard',
         });
         setShowProductModal(true);
     };
@@ -231,6 +232,7 @@ export default function ProductManagement({ branch }) {
                 imageUrl: form.imageUrl || null,
                 imagePublicId: form.imagePublicId || null,
                 branch: effectiveBranch,
+                vatClass: form.vatClass || 'standard',
             };
 
             if (editingId) {
