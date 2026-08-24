@@ -19,6 +19,43 @@ function initialsOf(name = '') {
     return name.trim().split(/\s+/).map((n) => n[0]).slice(0, 2).join('').toUpperCase() || '?';
 }
 
+// Mirrors backend utils/vat.js buildOrderVat — used here only to show the
+// cashier a live estimate before checkout. The server recomputes the real
+// figures independently, so this never needs to be perfectly authoritative.
+function estimateCartVat(cart, vatSettings) {
+    const rungUpTotal = cart.reduce((sum, i) => sum + i.lineTotal, 0);
+
+    if (!vatSettings?.enabled) {
+        return { vatEnabled: false, vatAmount: 0, netSubtotal: rungUpTotal, totalDue: rungUpTotal };
+    }
+
+    const { rate, priceMode } = vatSettings;
+    let vatAmount = 0;
+    let netSubtotal = 0;
+
+    for (const item of cart) {
+        const lineTotal = item.lineTotal;
+        if (item.vatClass === 'zero' || item.vatClass === 'exempt') {
+            netSubtotal += lineTotal;
+            continue;
+        }
+        if (priceMode === 'inclusive') {
+            const net = lineTotal / (1 + rate / 100);
+            vatAmount += lineTotal - net;
+            netSubtotal += net;
+        } else {
+            vatAmount += lineTotal * (rate / 100);
+            netSubtotal += lineTotal;
+        }
+    }
+
+    vatAmount = Number(vatAmount.toFixed(2));
+    netSubtotal = Number(netSubtotal.toFixed(2));
+    const totalDue = priceMode === 'inclusive' ? rungUpTotal : Number((netSubtotal + vatAmount).toFixed(2));
+
+    return { vatEnabled: true, vatAmount, netSubtotal, totalDue };
+}
+
 export default function CashierPage() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
@@ -36,6 +73,7 @@ export default function CashierPage() {
     const [receipt, setReceipt] = useState(null); // set once the sale is created, pre-payment
     const [showPayment, setShowPayment] = useState(false);
     const [checkingOut, setCheckingOut] = useState(false);
+    const [vatSettings, setVatSettings] = useState(null);
 
     const [now, setNow] = useState(new Date());
 
@@ -77,6 +115,13 @@ export default function CashierPage() {
 
     useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
+    // ---- VAT settings, for the live cart estimate ----
+    useEffect(() => {
+        API.get('/settings/public')
+            .then((res) => setVatSettings(res.data.vat || { enabled: false }))
+            .catch(() => setVatSettings({ enabled: false }));
+    }, []);
+
     // ---- Socket: broadcast the live cart to the Customer Display + join branch room ----
     useEffect(() => {
         const socket = io(SOCKET_URL);
@@ -103,13 +148,14 @@ export default function CashierPage() {
                 unitPrice: product.sellingPrice,
                 quantity: qty,
                 lineTotal: product.sellingPrice * qty,
+                vatClass: product.vatClass || 'standard',
             }];
         });
     };
 
     const updateQty = (productId, delta) => {
         setCart((prev) => prev
-            .map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + delta } : i))
+            .map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + delta, lineTotal: i.unitPrice * (i.quantity + delta) } : i))
             .filter((i) => i.quantity > 0));
     };
 
@@ -135,8 +181,11 @@ export default function CashierPage() {
     };
 
     // ---- Totals ----
-    const subtotal = cart.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
     const totalQty = cart.reduce((sum, i) => sum + i.quantity, 0);
+    const { vatEnabled, vatAmount, netSubtotal, totalDue } = useMemo(
+        () => estimateCartVat(cart, vatSettings),
+        [cart, vatSettings]
+    );
 
     // ---- Checkout: creates the Order + Receipt (unpaid), then opens payment ----
     const handleCheckout = async () => {
@@ -145,10 +194,12 @@ export default function CashierPage() {
 
         setCheckingOut(true);
         try {
-            const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, lineTotal }) => ({
-                productId, productName, imageUrl, quantity, unitPrice, lineTotal,
+            const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass }) => ({
+                productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass,
             }));
-            const res = await API.post('/orders', { items, subtotal, branch: user.branch });
+            // subtotal sent here is just a display hint — the server always
+            // recomputes it (and the VAT/totalDue figures) from `items` itself.
+            const res = await API.post('/orders', { items, subtotal: netSubtotal, branch: user.branch });
             setReceipt(res.data.receipt);
             setShowPayment(true);
         } catch (err) {
@@ -404,9 +455,24 @@ export default function CashierPage() {
 
                                 {/* Total + Pay button now sit right after the last product, not pinned to the screen bottom */}
                                 <div className="pt-1 space-y-2.5">
-                                    <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-200">
-                                        <span className="text-sm font-extrabold text-gray-900">Total ({totalQty} items)</span>
-                                        <span className="text-xl font-black text-brand-orange">{subtotal.toLocaleString()} KES</span>
+                                    <div className="bg-white p-3 rounded-xl border border-gray-200 space-y-1.5">
+                                        {vatEnabled && (
+                                            <>
+                                                <div className="flex justify-between items-center text-xs text-gray-500 font-semibold">
+                                                    <span>Subtotal</span>
+                                                    <span>{netSubtotal.toLocaleString()} KES</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-xs text-gray-500 font-semibold">
+                                                    <span>VAT ({vatSettings.rate}%)</span>
+                                                    <span>{vatAmount.toLocaleString()} KES</span>
+                                                </div>
+                                                <div className="border-t border-dashed border-gray-200" />
+                                            </>
+                                        )}
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-sm font-extrabold text-gray-900">Total ({totalQty} items)</span>
+                                            <span className="text-xl font-black text-brand-orange">{totalDue.toLocaleString()} KES</span>
+                                        </div>
                                     </div>
                                     <button onClick={handleCheckout} disabled={checkingOut || cart.length === 0}
                                         className="w-full py-3 bg-brand-orange hover:bg-brand-orange-hover text-white rounded-xl text-sm font-extrabold disabled:opacity-50">
@@ -428,4 +494,4 @@ export default function CashierPage() {
             <HistoryModal open={showHistory} branch={user.branch} onClose={() => setShowHistory(false)} />
         </div>
     );
-        }
+           }
