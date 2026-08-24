@@ -1,7 +1,7 @@
-import { Pencil, Trash2, Package, Barcode, PackagePlus } from 'lucide-react';
+import { Pencil, Trash2, Package, Barcode, PackagePlus, AlertTriangle } from 'lucide-react';
 import { avgCostPerEach, money, earliestExpiry, isExpiringSoon } from './productManagementUtils';
 
-export default function ProductTable({ products, onReceiveStock, onPrintLabel, onEdit, onDelete }) {
+export default function ProductTable({ products, onReceiveStock, onReportLoss, onPrintLabel, onEdit, onDelete }) {
     return (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
@@ -123,6 +123,10 @@ export default function ProductTable({ products, onReceiveStock, onPrintLabel, o
                                                     className="p-1.5 rounded-lg bg-gray-100 hover:bg-green-600 hover:text-white text-gray-700 transition">
                                                     <PackagePlus size={13} />
                                                 </button>
+                                                <button onClick={() => onReportLoss(item)} title="Report loss / damage / theft"
+                                                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-red-600 hover:text-white text-gray-700 transition">
+                                                    <AlertTriangle size={13} />
+                                                </button>
                                                 <button onClick={() => onPrintLabel(item)} title="Print barcode label"
                                                     className="p-1.5 rounded-lg bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700 transition">
                                                     <Barcode size={13} />
@@ -146,4 +150,4 @@ export default function ProductTable({ products, onReceiveStock, onPrintLabel, o
             </div>
         </div>
     );
-                                                        }
+                                                    }
