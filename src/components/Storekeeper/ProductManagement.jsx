@@ -15,6 +15,7 @@ import ProductFilters from './ProductFilters';
 import ProductTable from './ProductTable';
 import ProductFormModal from './ProductFormModal';
 import ReceiveStockModal from './ReceiveStockModal';
+import StockAdjustmentModal from './StockAdjustmentModal';
 
 export default function ProductManagement({ branch }) {
     const { user } = useAuth();
@@ -36,6 +37,7 @@ export default function ProductManagement({ branch }) {
     const [stockForm, setStockForm] = useState(EMPTY_STOCK);
     const [receiving, setReceiving] = useState(false);
     const [labelFor, setLabelFor] = useState(null);
+    const [adjustingFor, setAdjustingFor] = useState(null);
 
     const [showUnitManager, setShowUnitManager] = useState(false);
     const [unitForm, setUnitForm] = useState(EMPTY_UNIT);
@@ -401,6 +403,7 @@ export default function ProductManagement({ branch }) {
             <ProductTable
                 products={filteredProducts}
                 onReceiveStock={(item) => { setReceivingFor(item); setStockForm(EMPTY_STOCK); }}
+                onReportLoss={(item) => setAdjustingFor(item)}
                 onPrintLabel={(item) => setLabelFor(item)}
                 onEdit={startEdit}
                 onDelete={(item) => setPendingDelete(item)}
@@ -443,6 +446,13 @@ export default function ProductManagement({ branch }) {
                 hasCase={hasCase}
             />
 
+            <StockAdjustmentModal
+                product={adjustingFor}
+                open={!!adjustingFor}
+                onClose={() => setAdjustingFor(null)}
+                onSubmitted={fetchProducts}
+            />
+
             {labelFor && <LabelPrintModal product={labelFor} onClose={() => setLabelFor(null)} />}
 
             <ConfirmModal
@@ -463,4 +473,4 @@ export default function ProductManagement({ branch }) {
             `}</style>
         </div>
     );
-        }
+                            }
