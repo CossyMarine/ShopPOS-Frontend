@@ -36,7 +36,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
     const [rewardIdentifier, setRewardIdentifier] = useState('');
     const [awardingReward, setAwardingReward] = useState(false);
 
-    const balanceDue = receipt.subtotal - (receipt.amountPaid || 0);
+    const balanceDue = receipt.totalDue - (receipt.amountPaid || 0);
 
     const comboCashNum = parseFloat(comboCash) || 0;
     const comboTillNum = parseFloat(comboTill) || 0;
@@ -143,7 +143,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
         if (!rewardIdentifier.trim()) return toast.error("Enter the customer's email or phone");
         setAwardingReward(true);
         try {
-            await API.post('/wallet/admin/add-reward', { identifier: rewardIdentifier.trim(), amountSpent: receipt.subtotal });
+            await API.post('/wallet/admin/add-reward', { identifier: rewardIdentifier.trim(), amountSpent: receipt.totalDue });
             toast.success('Reward points added');
             onComplete();
         } catch (err) {
@@ -216,7 +216,14 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                 <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
                     <div>
                         <h3 className="text-base font-black text-gray-800">{receipt.billId}</h3>
-                        <p className="text-xs text-gray-500">Balance due: <span className="font-bold text-orange-500">KES {balanceDue.toLocaleString()}</span></p>
+                        {receipt.vatEnabled ? (
+                            <p className="text-[11px] text-gray-400 leading-tight">
+                                Subtotal {receipt.subtotal.toLocaleString()} + VAT {receipt.vatAmount.toLocaleString()} · Balance due:{' '}
+                                <span className="font-bold text-orange-500">KES {balanceDue.toLocaleString()}</span>
+                            </p>
+                        ) : (
+                            <p className="text-xs text-gray-500">Balance due: <span className="font-bold text-orange-500">KES {balanceDue.toLocaleString()}</span></p>
+                        )}
                     </div>
                     <button onClick={handleCloseClick} disabled={closing} className="text-gray-400 hover:text-gray-600 disabled:opacity-50"><X size={18} /></button>
                 </div>
@@ -318,4 +325,4 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
             </div>
         </div>
     );
-    }
+        }
