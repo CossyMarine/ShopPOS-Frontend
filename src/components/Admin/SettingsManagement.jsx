@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, RefreshCw, Store, Landmark, MessageCircle, Gift } from 'lucide-react';
+import { Save, RefreshCw, Store, Landmark, MessageCircle, Gift, Percent } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 
@@ -15,6 +15,11 @@ const EMPTY = {
         pointValueKes: 1,
         targetPoints: 0,
         description: '',
+    },
+    vat: {
+        enabled: true,
+        rate: 16,
+        priceMode: 'exclusive',
     },
 };
 
@@ -40,6 +45,11 @@ export default function SettingsManagement() {
                     targetPoints: res.data.reward?.targetPoints ?? 0,
                     description: res.data.reward?.description || '',
                 },
+                vat: {
+                    enabled: res.data.vat?.enabled ?? true,
+                    rate: res.data.vat?.rate ?? 16,
+                    priceMode: res.data.vat?.priceMode || 'exclusive',
+                },
             });
         } catch (err) {
             console.error('Failed to fetch settings', err);
@@ -53,6 +63,7 @@ export default function SettingsManagement() {
     }, []);
 
     const setReward = (patch) => setForm((f) => ({ ...f, reward: { ...f.reward, ...patch } }));
+    const setVat = (patch) => setForm((f) => ({ ...f, vat: { ...f.vat, ...patch } }));
 
     const handleSave = async () => {
         setSaving(true);
@@ -215,6 +226,80 @@ export default function SettingsManagement() {
                         <p className="text-[11px] text-gray-400 mt-1">Shown to customers on their wallet page</p>
                     </Field>
                 </div>
+
+                {/* VAT */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-5">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <h3 className="text-base font-black text-gray-800 flex items-center gap-2">
+                            <Percent size={16} className="text-orange-500" />
+                            VAT
+                        </h3>
+                        <button
+                            onClick={() => setVat({ enabled: !form.vat.enabled })}
+                            className={`relative w-11 h-6 rounded-full transition-colors ${form.vat.enabled ? 'bg-orange-500' : 'bg-gray-300'}`}
+                        >
+                            <span
+                                className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                                    form.vat.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                                }`}
+                            />
+                        </button>
+                    </div>
+
+                    {!form.vat.enabled && (
+                        <p className="text-[11px] text-orange-600 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2">
+                            VAT is off — items sell at their listed price with no tax added or shown on receipts.
+                        </p>
+                    )}
+
+                    <Field label="VAT Rate (%)">
+                        <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            disabled={!form.vat.enabled}
+                            value={form.vat.rate}
+                            onChange={(e) => setVat({ rate: parseFloat(e.target.value) || 0 })}
+                            className="input disabled:opacity-50"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">Standard KRA VAT rate is 16%</p>
+                    </Field>
+
+                    <Field label="How prices are entered">
+                        <div className="flex bg-gray-50 rounded-xl p-1 border border-gray-200">
+                            <button
+                                type="button"
+                                disabled={!form.vat.enabled}
+                                onClick={() => setVat({ priceMode: 'exclusive' })}
+                                className={`flex-1 text-xs font-bold py-2 rounded-lg transition disabled:opacity-50 ${
+                                    form.vat.priceMode === 'exclusive' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-500'
+                                }`}
+                            >
+                                Excluded (add VAT on top)
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!form.vat.enabled}
+                                onClick={() => setVat({ priceMode: 'inclusive' })}
+                                className={`flex-1 text-xs font-bold py-2 rounded-lg transition disabled:opacity-50 ${
+                                    form.vat.priceMode === 'inclusive' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-500'
+                                }`}
+                            >
+                                Included in price
+                            </button>
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                            {form.vat.priceMode === 'exclusive'
+                                ? 'Product selling prices exclude VAT — it is added at checkout, shown as a separate line on the receipt.'
+                                : 'Product selling prices already include VAT — the receipt shows the VAT portion for reporting, but the customer pays exactly the listed price.'}
+                        </p>
+                    </Field>
+
+                    <p className="text-[11px] text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                        Individual products can be marked Zero-rated or Exempt (e.g. maize flour, milk) in the product form — this rate only applies to Standard-rated items.
+                    </p>
+                </div>
             </div>
 
             <div className="flex justify-end">
@@ -259,4 +344,4 @@ function Field({ label, children }) {
             {children}
         </div>
     );
-                            }
+                                }
