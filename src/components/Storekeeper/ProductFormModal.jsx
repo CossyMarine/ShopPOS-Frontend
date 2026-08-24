@@ -73,6 +73,19 @@ export default function ProductFormModal({
                         </div>
 
                         <div className="col-span-2">
+                            <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">VAT Class</label>
+                            <select
+                                value={form.vatClass || 'standard'}
+                                onChange={(e) => setForm({ ...form, vatClass: e.target.value })}
+                                className="input font-bold"
+                            >
+                                <option value="standard">Standard-rated (VAT applies)</option>
+                                <option value="zero">Zero-rated (e.g. maize flour, milk, bread)</option>
+                                <option value="exempt">Exempt (outside VAT scope)</option>
+                            </select>
+                        </div>
+
+                        <div className="col-span-2">
                             <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Barcode (each)</label>
                             <div className="flex gap-1">
                                 <input value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })}
@@ -249,4 +262,4 @@ export default function ProductFormModal({
             </div>
         </div>
     );
-                                }
+                    }
