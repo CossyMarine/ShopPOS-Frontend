@@ -1,12 +1,13 @@
 import {
     LayoutDashboard, Boxes, ReceiptText, CreditCard,
-    ShieldAlert, Users, Store, Settings, ClipboardList, LogOut, X, Brain, BarChart3,
+    ShieldAlert, Users, Store, Settings, ClipboardList, LogOut, X, Brain, BarChart3,ArrowRightLeft,
 } from 'lucide-react';
 
 export const ADMIN_NAV_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'products', label: 'Products & Stock', icon: Boxes },
+    { id: 'transfers', label: 'Stock Transfers', icon: ArrowRightLeft },
     { id: 'orders', label: 'Sales & Receipts', icon: ReceiptText },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'voids', label: 'Void Requests', icon: ShieldAlert },
