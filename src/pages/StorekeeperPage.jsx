@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import ProductManagement from "../components/Storekeeper/ProductManagement";
 import ClockWidget from "../components/Staff/ClockWidget";
 import LeavePanel from "../components/Staff/LeavePanel";
+import StockTransfers from "../components/Storekeeper/StockTransfers";
 
 export default function StorekeeperPage() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function StorekeeperPage() {
         <ClockWidget />
         <LeavePanel />
         <ProductManagement />
+        <StockTransfers />
       </div>
     </div>
   );
