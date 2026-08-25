@@ -19,7 +19,7 @@ import SettingsManagement from '../components/Admin/SettingsManagement';
 import AiInsights from '../components/Admin/AiInsights';
 import AnalyticsPage from '../components/Admin/AnalyticsPage';
 import StockAdjustmentsView from '../components/Admin/StockAdjustmentsView';
-
+import StockTransfers from '../components/Storekeeper/StockTransfers';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
@@ -27,6 +27,7 @@ const VIEWS = {
     dashboard: DashboardOverview,
     analytics: AnalyticsPage,
     products: ProductManagement,
+    transfers: StockTransfers,
     orders: OrdersLedger,
     payments: PaymentsView,
     voids: VoidRequestsView,
