@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Store, Plus, UserCog } from 'lucide-react';
+import { Store, Plus, UserCog, Warehouse } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import { useBranch } from '../../context/BranchContext';
@@ -7,10 +7,11 @@ import { useBranch } from '../../context/BranchContext';
 export default function BranchesManagement() {
     const { branches, setSelectedBranch } = useBranch();
     const [localBranches, setLocalBranches] = useState(branches);
-    const [form, setForm] = useState({ name: '', address: '', taxRate: 16 });
+    const [form, setForm] = useState({ name: '', address: '', taxRate: 16, isWarehouse: false });
     const [creating, setCreating] = useState(false);
     const [managers, setManagers] = useState([]); // unassigned/reassignable staff for the picker
     const [assigningFor, setAssigningFor] = useState(null); // branch being assigned
+    const [togglingId, setTogglingId] = useState(null);
 
     const fetchBranches = async () => {
         try {
@@ -38,7 +39,7 @@ export default function BranchesManagement() {
         try {
             await API.post('/branches', form);
             toast.success('Branch created');
-            setForm({ name: '', address: '', taxRate: 16 });
+            setForm({ name: '', address: '', taxRate: 16, isWarehouse: false });
             fetchBranches();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to create branch');
@@ -56,6 +57,21 @@ export default function BranchesManagement() {
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to assign manager');
         }
+    };
+
+    // Toggles whether this branch is treated as the central warehouse —
+    // powers the "Replenishment" flow in Stock Transfers. Nothing stops you
+    // marking more than one, but the UI is built around there being one.
+    const toggleWarehouse = async (branch) => {
+        setTogglingId(branch._id);
+        try {
+            await API.put(`/branches/${branch._id}`, { isWarehouse: !branch.isWarehouse });
+            toast.success(branch.isWarehouse ? 'No longer marked as warehouse' : 'Marked as central warehouse');
+            fetchBranches();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update branch');
+        }
+        setTogglingId(null);
     };
 
     return (
@@ -79,6 +95,12 @@ export default function BranchesManagement() {
                             <label className="text-xs font-semibold text-gray-400">Tax Rate (%)</label>
                             <input type="number" value={form.taxRate} onChange={(e) => setForm({ ...form, taxRate: e.target.value })} className="input" />
                         </div>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+                            <input type="checkbox" checked={form.isWarehouse}
+                                onChange={(e) => setForm({ ...form, isWarehouse: e.target.checked })}
+                                className="rounded border-gray-300" />
+                            This is the central warehouse
+                        </label>
                         <button onClick={handleCreate} disabled={creating}
                             className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">
                             {creating ? 'Creating…' : 'Create Branch'}
@@ -93,6 +115,11 @@ export default function BranchesManagement() {
                                 <div className="flex items-center gap-2">
                                     <Store size={16} className="text-orange-500" />
                                     <h4 className="font-black text-gray-800">{b.name}</h4>
+                                    {b.isWarehouse && (
+                                        <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-black flex items-center gap-0.5">
+                                            <Warehouse size={9} /> Warehouse
+                                        </span>
+                                    )}
                                 </div>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${b.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                                     {b.isActive ? 'Active' : 'Inactive'}
@@ -101,7 +128,7 @@ export default function BranchesManagement() {
                             <p className="text-xs text-gray-400 mt-1">{b.address || 'No address set'}</p>
                             <p className="text-xs text-gray-500 mt-1">Tax rate: <span className="font-bold">{b.taxRate}%</span></p>
 
-                            <div className="mt-3 pt-3 border-t border-gray-100">
+                            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
                                 {assigningFor === b._id ? (
                                     <select autoFocus onChange={(e) => e.target.value && handleAssign(b._id, e.target.value)}
                                         onBlur={() => setAssigningFor(null)} className="input text-xs">
@@ -117,6 +144,10 @@ export default function BranchesManagement() {
                                         {b.manager ? `Manager: ${b.manager.fullName}` : 'Assign a manager'}
                                     </button>
                                 )}
+                                <button onClick={() => toggleWarehouse(b)} disabled={togglingId === b._id}
+                                    className="text-[10px] font-bold text-gray-400 hover:text-indigo-600 disabled:opacity-50">
+                                    {togglingId === b._id ? '…' : b.isWarehouse ? 'Unmark warehouse' : 'Mark as warehouse'}
+                                </button>
                             </div>
                         </div>
                     ))}
