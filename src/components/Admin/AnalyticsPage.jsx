@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     TrendingUp, TrendingDown, Wallet, Users, PackageX, Clock,
-    Store, RefreshCw, CircleDollarSign, Award,
+    Store, RefreshCw, CircleDollarSign, Award, Layers,
 } from 'lucide-react';
 import {
     ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -57,6 +57,13 @@ export default function AnalyticsPage({ branch } = {}) {
     const [error, setError] = useState(null);
     const [staffModalOpen, setStaffModalOpen] = useState(false);
 
+    // Category margin and dead stock are fetched independently — margin
+    // follows the same range filter as everything else, dead stock is
+    // deliberately its own thing (all-time last-sale, not range-bound).
+    const [categoryMargin, setCategoryMargin] = useState({ categories: [], totals: {} });
+    const [deadStock, setDeadStock] = useState({ items: [], totalValueTiedUp: 0, thresholdDays: 30 });
+    const [deadStockDays, setDeadStockDays] = useState(30);
+
     const fetchAnalytics = useCallback(async () => {
         if (range === 'custom' && (!customFrom || !customTo)) return;
         setLoading(true);
@@ -68,8 +75,12 @@ export default function AnalyticsPage({ branch } = {}) {
                 params.from = customFrom;
                 params.to = customTo;
             }
-            const res = await API.get('/analytics/overview', { params });
-            setData(res.data);
+            const [overviewRes, marginRes] = await Promise.all([
+                API.get('/analytics/overview', { params }),
+                API.get('/analytics/category-margin', { params }),
+            ]);
+            setData(overviewRes.data);
+            setCategoryMargin(marginRes.data);
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to load analytics');
         } finally {
@@ -77,7 +88,19 @@ export default function AnalyticsPage({ branch } = {}) {
         }
     }, [range, branch, customFrom, customTo]);
 
+    const fetchDeadStock = useCallback(async () => {
+        try {
+            const params = { days: deadStockDays };
+            if (branch) params.branch = branch;
+            const res = await API.get('/analytics/dead-stock', { params });
+            setDeadStock(res.data);
+        } catch {
+            // Non-critical — the rest of the page still works without it.
+        }
+    }, [branch, deadStockDays]);
+
     useEffect(() => { fetchAnalytics(); }, [fetchAnalytics]);
+    useEffect(() => { fetchDeadStock(); }, [fetchDeadStock]);
 
     const { totals, profitTrend, topItems, stuckItems, slowMovingItems, branchPerformance, topBranch, salary } = data;
     const profitPositive = totals.profitAfterSalary >= 0;
@@ -254,6 +277,102 @@ export default function AnalyticsPage({ branch } = {}) {
                 </div>
             </div>
 
+            {/* Category margin */}
+            <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                    <Layers size={16} className="text-brand-orange" />
+                    <h2 className="text-sm font-extrabold text-gray-900">Margin by Category</h2>
+                </div>
+                {categoryMargin.categories.length === 0 ? (
+                    <p className="text-xs text-gray-400">No sales in this range yet.</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                            <thead>
+                                <tr className="border-b border-gray-100 text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                                    <th className="py-2 pr-3">Category</th>
+                                    <th className="py-2 pr-3 text-right">Revenue</th>
+                                    <th className="py-2 pr-3 text-right">Cost</th>
+                                    <th className="py-2 pr-3 text-right">Profit</th>
+                                    <th className="py-2 text-right">Margin</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {categoryMargin.categories.map((c) => (
+                                    <tr key={c.category}>
+                                        <td className="py-2 pr-3 font-bold text-gray-800">{c.category}</td>
+                                        <td className="py-2 pr-3 text-right font-mono text-gray-600">{money(c.revenue)}</td>
+                                        <td className="py-2 pr-3 text-right font-mono text-gray-400">{money(c.cost)}</td>
+                                        <td className={`py-2 pr-3 text-right font-mono font-bold ${c.profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>{money(c.profit)}</td>
+                                        <td className="py-2 text-right">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${c.marginPct >= 20 ? 'bg-green-50 text-green-600' : c.marginPct >= 0 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>
+                                                {c.marginPct}%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr className="border-t border-gray-200 font-black text-gray-900">
+                                    <td className="py-2 pr-3">Total</td>
+                                    <td className="py-2 pr-3 text-right font-mono">{money(categoryMargin.totals.revenue)}</td>
+                                    <td className="py-2 pr-3 text-right font-mono">{money(categoryMargin.totals.cost)}</td>
+                                    <td className="py-2 pr-3 text-right font-mono">{money(categoryMargin.totals.profit)}</td>
+                                    <td className="py-2 text-right">{categoryMargin.totals.marginPct}%</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* Dead stock */}
+            <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                        <PackageX size={16} className="text-red-500" />
+                        <h2 className="text-sm font-extrabold text-gray-900">Dead Stock</h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400 font-semibold">No sales in</span>
+                        <select value={deadStockDays} onChange={(e) => setDeadStockDays(Number(e.target.value))}
+                            className="text-[11px] font-bold border border-gray-200 rounded-lg px-2 py-1 bg-gray-50">
+                            <option value={14}>14 days</option>
+                            <option value={30}>30 days</option>
+                            <option value={60}>60 days</option>
+                            <option value={90}>90 days</option>
+                        </select>
+                    </div>
+                </div>
+                {deadStock.items.length === 0 ? (
+                    <p className="text-xs text-gray-400">Nothing has been sitting idle past this threshold — good sign.</p>
+                ) : (
+                    <>
+                        <p className="text-xs text-gray-500 mb-3">
+                            <span className="font-black text-red-500">{money(deadStock.totalValueTiedUp)}</span> tied up across {deadStock.items.length} product{deadStock.items.length !== 1 ? 's' : ''}
+                        </p>
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                            {deadStock.items.map((it) => (
+                                <div key={it.productId} className="flex items-center justify-between p-2.5 bg-red-50/50 rounded-lg border border-red-100">
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-gray-800 truncate">{it.productName}</p>
+                                        <p className="text-[11px] text-gray-500">
+                                            {it.category}{it.branchName ? ` · ${it.branchName}` : ''} · {it.currentStock} in stock
+                                        </p>
+                                    </div>
+                                    <div className="text-right shrink-0 pl-2">
+                                        <p className="text-xs font-bold text-red-500">{money(it.stockValue)}</p>
+                                        <p className="text-[10px] text-gray-400">
+                                            {it.daysSinceLastSale === null ? 'Never sold' : `${it.daysSinceLastSale}d since last sale`}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+
             {/* Salary section */}
             <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -341,4 +460,4 @@ function StaffSalaryModal({ staff, onClose }) {
             </div>
         </div>
     );
-                      }
+                    }
