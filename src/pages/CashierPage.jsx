@@ -136,6 +136,10 @@ export default function CashierPage() {
 
     // ---- Cart operations ----
     const addToCart = (product, qty = 1) => {
+        // Price at the moment of adding, factoring in any active promotion —
+        // this is a live preview, but the server recomputes it independently
+        // at checkout regardless, so this is purely for the cashier's screen.
+        const effectivePrice = product.activePromotion?.effectivePrice ?? product.sellingPrice;
         setCart((prev) => {
             const existing = prev.find((i) => i.productId === product._id);
             if (existing) {
@@ -145,9 +149,11 @@ export default function CashierPage() {
                 productId: product._id,
                 productName: product.name,
                 imageUrl: product.imageUrl || null,
-                unitPrice: product.sellingPrice,
+                unitPrice: effectivePrice,
+                originalPrice: product.sellingPrice,
+                promotionName: product.activePromotion?.name || null,
                 quantity: qty,
-                lineTotal: product.sellingPrice * qty,
+                lineTotal: effectivePrice * qty,
                 vatClass: product.vatClass || 'standard',
             }];
         });
@@ -392,12 +398,18 @@ export default function CashierPage() {
                             {visibleProducts.map((p) => {
                                 const stock = p.currentStock ?? 0;
                                 const qtyInCart = cart.find((i) => i.productId === p._id)?.quantity || 0;
+                                const promo = p.activePromotion;
                                 return (
                                     <button key={p._id} onClick={() => stock > 0 && addToCart(p)} disabled={stock <= 0}
                                         className="relative text-left p-2.5 bg-white rounded-xl border border-gray-200 hover:border-brand-orange hover:shadow-md transition flex flex-col disabled:opacity-40">
                                         {qtyInCart > 0 && (
                                             <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-brand-orange text-white text-[11px] font-black flex items-center justify-center shadow-md ring-2 ring-white z-10">
                                                 {qtyInCart}
+                                            </span>
+                                        )}
+                                        {promo && (
+                                            <span className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full z-10">
+                                                {promo.type === 'percent_off' ? `-${promo.value}%` : `-${promo.value} KES`}
                                             </span>
                                         )}
                                         <div className="w-full h-28 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-1.5">
@@ -409,7 +421,14 @@ export default function CashierPage() {
                                         </div>
                                         <h4 className="text-xs font-bold text-gray-800 line-clamp-2">{p.name}</h4>
                                         <div className="mt-1.5 flex justify-between items-center">
-                                            <span className="text-xs font-extrabold text-brand-orange">{p.sellingPrice} KES</span>
+                                            {promo ? (
+                                                <span className="flex items-baseline gap-1">
+                                                    <span className="text-xs font-extrabold text-red-500">{promo.effectivePrice} KES</span>
+                                                    <span className="text-[9px] text-gray-400 line-through">{p.sellingPrice}</span>
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs font-extrabold text-brand-orange">{p.sellingPrice} KES</span>
+                                            )}
                                             <span className={`text-[9px] font-bold px-1 rounded ${stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                                                 {stock > 0 ? stock : 'Out'}
                                             </span>
@@ -441,7 +460,12 @@ export default function CashierPage() {
                                     <div key={item.productId} className="bg-white p-2.5 rounded-xl border border-gray-200 flex items-center justify-between">
                                         <div className="flex-1 min-w-0 pr-2">
                                             <h4 className="text-xs font-bold text-gray-900 truncate">{item.productName}</h4>
-                                            <span className="text-[10px] text-gray-500">{item.unitPrice} KES × {item.quantity}</span>
+                                            <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                                {item.unitPrice} KES × {item.quantity}
+                                                {item.promotionName && (
+                                                    <span className="text-[9px] bg-red-50 text-red-500 font-bold px-1 rounded">{item.promotionName}</span>
+                                                )}
+                                            </span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <button onClick={() => updateQty(item.productId, -1)} className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center"><Minus size={12} /></button>
@@ -494,4 +518,4 @@ export default function CashierPage() {
             <HistoryModal open={showHistory} branch={user.branch} onClose={() => setShowHistory(false)} />
         </div>
     );
-           }
+        }
