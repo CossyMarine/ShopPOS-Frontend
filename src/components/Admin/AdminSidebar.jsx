@@ -1,6 +1,7 @@
 import {
     LayoutDashboard, Boxes, ReceiptText, CreditCard,
-    ShieldAlert, Users, Store, Settings, ClipboardList, LogOut, X, Brain, BarChart3,ArrowRightLeft,
+    ShieldAlert, Users, Store, Settings, ClipboardList, LogOut, X, Brain, BarChart3,ArrowRightLeft, Tag,
+    
 } from 'lucide-react';
 
 export const ADMIN_NAV_ITEMS = [
@@ -8,6 +9,7 @@ export const ADMIN_NAV_ITEMS = [
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'products', label: 'Products & Stock', icon: Boxes },
     { id: 'transfers', label: 'Stock Transfers', icon: ArrowRightLeft },
+     { id: 'pricing', label: 'Pricing & Promotions', icon: Tag },
     { id: 'orders', label: 'Sales & Receipts', icon: ReceiptText },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'voids', label: 'Void Requests', icon: ShieldAlert },
