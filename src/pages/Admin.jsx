@@ -20,6 +20,7 @@ import AiInsights from '../components/Admin/AiInsights';
 import AnalyticsPage from '../components/Admin/AnalyticsPage';
 import StockAdjustmentsView from '../components/Admin/StockAdjustmentsView';
 import StockTransfers from '../components/Storekeeper/StockTransfers';
+import PricingPromotions from '../components/Admin/PricingPromotions';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
@@ -28,6 +29,7 @@ const VIEWS = {
     analytics: AnalyticsPage,
     products: ProductManagement,
     transfers: StockTransfers,
+    pricing: PricingPromotions,
     orders: OrdersLedger,
     payments: PaymentsView,
     voids: VoidRequestsView,
