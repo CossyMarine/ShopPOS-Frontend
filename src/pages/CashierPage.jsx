@@ -5,12 +5,17 @@ import { toast } from 'react-toastify';
 import { Barcode, Trash2, Plus, Minus, X, Lock, ShieldAlert, History, UserCircle2, LogOut } from 'lucide-react';
 import API from '../api/axios';
 import { useAuth } from '../hooks/useAuth';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import PaymentModal from '../components/Cashier/PaymentModal';
+import OfflineCashPaymentModal from '../components/Cashier/OfflineCashPaymentModal';
+import OfflineBanner from '../components/Cashier/OfflineBanner';
 import OpenShiftModal from '../components/Cashier/OpenShiftModal';
 import CloseShiftModal from '../components/Cashier/CloseShiftModal';
 import VoidRequestModal from '../components/Cashier/VoidRequestModal';
 import HistoryModal from '../components/Cashier/HistoryModal';
 import { formatKenyanDate, formatKenyanTime } from '../utils/formatDate';
+import { cacheProducts, getCachedProducts } from '../utils/offlineDb';
+import { buildOfflineSale, queueOfflineSale, syncOfflineQueue, getQueuedSaleCount } from '../utils/offlineSync';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 const REGISTER_ID = 'reg-1'; // one cashier login = one physical register; make this configurable if a branch runs multiple
@@ -59,12 +64,16 @@ function estimateCartVat(cart, vatSettings) {
 export default function CashierPage() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const { isOnline } = useOnlineStatus();
     const [shift, setShift] = useState(null);
     const [shiftLoading, setShiftLoading] = useState(true);
     const [showOpenShift, setShowOpenShift] = useState(false);
     const [showCloseShift, setShowCloseShift] = useState(false);
     const [showVoid, setShowVoid] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [showOfflinePayment, setShowOfflinePayment] = useState(false);
+    const [pendingSyncCount, setPendingSyncCount] = useState(0);
+    const [syncing, setSyncing] = useState(false);
 
     const [products, setProducts] = useState([]);
     const [category, setCategory] = useState('All');
@@ -103,13 +112,23 @@ export default function CashierPage() {
 
     useEffect(() => { fetchShift(); }, [fetchShift]);
 
-    // ---- Catalog ----
+    // ---- Catalog: cache every successful fetch, fall back to the last
+    // cache when there's no connection to fetch fresh — better a slightly
+    // stale price list than no cart at all when the shop needs to keep
+    // ringing up sales through an outage. ----
     const fetchProducts = useCallback(async () => {
         try {
             const res = await API.get('/products', { params: { branch: user.branch } });
             setProducts(res.data);
-        } catch {
-            toast.error('Failed to load products');
+            cacheProducts(res.data).catch(() => {}); // best-effort, never blocks the UI on a cache write failing
+        } catch (err) {
+            const cached = await getCachedProducts().catch(() => []);
+            if (cached.length > 0) {
+                setProducts(cached.filter((p) => p.branch === user.branch || p.branch?._id === user.branch));
+                if (err.response) toast.error('Failed to load products — showing last known prices');
+            } else {
+                toast.error('Failed to load products');
+            }
         }
     }, [user.branch]);
 
@@ -133,6 +152,42 @@ export default function CashierPage() {
     useEffect(() => {
         socketRef.current?.emit('cart:scan', { branchId: user.branch, registerId: REGISTER_ID, cart });
     }, [cart, user.branch]);
+
+    // ---- Offline queue: keep the pending count current, and sync
+    // automatically the moment the connection is verified real (not just
+    // navigator.onLine flipping true, which can lag or false-positive). ----
+    const refreshPendingCount = useCallback(() => {
+        getQueuedSaleCount().then(setPendingSyncCount).catch(() => {});
+    }, []);
+
+    useEffect(() => { refreshPendingCount(); }, [refreshPendingCount]);
+
+    const runSync = useCallback(async () => {
+        setSyncing(true);
+        try {
+            const result = await syncOfflineQueue();
+            if (result.synced > 0) {
+                toast.success(`Synced ${result.synced} offline sale${result.synced !== 1 ? 's' : ''}`);
+                fetchProducts(); // stock counts may have shifted from the sync
+            }
+            if (result.discrepancies > 0) {
+                toast.warn(`${result.discrepancies} synced sale(s) had a stock mismatch — check with your manager`);
+            }
+            if (result.failures?.length > 0) {
+                toast.error(`${result.failures.length} sale(s) failed to sync — still saved on this device`);
+            }
+        } catch {
+            // Sync failed outright (e.g. connection dropped again mid-sync) —
+            // everything stays safely queued for the next attempt, silently.
+        }
+        refreshPendingCount();
+        setSyncing(false);
+    }, [fetchProducts, refreshPendingCount]);
+
+    useEffect(() => {
+        if (isOnline) runSync();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOnline]);
 
     // ---- Cart operations ----
     const addToCart = (product, qty = 1) => {
@@ -168,6 +223,9 @@ export default function CashierPage() {
     const removeItem = (productId) => setCart((prev) => prev.filter((i) => i.productId !== productId));
     const clearCart = () => setCart([]);
 
+    // Tries the live lookup first. Falls back to the cached catalog only on
+    // a genuine connection failure, not on a real "not found" response — a
+    // 404 from the server is still an authoritative answer, offline or not.
     const handleBarcodeSubmit = async () => {
         const code = barcode.trim();
         if (!code) return;
@@ -180,7 +238,20 @@ export default function CashierPage() {
                 addToCart(product);
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || `No product found for "${code}"`);
+            if (!err.response) {
+                const match = products.find((p) => p.barcode === code || p.caseBarcode === code);
+                if (match) {
+                    if ((match.currentStock ?? 0) <= 0) {
+                        toast.warning(`${match.name} is out of stock`);
+                    } else {
+                        addToCart(match);
+                    }
+                } else {
+                    toast.error(`No product found for "${code}" — offline, showing last known catalog only`);
+                }
+            } else {
+                toast.error(err.response?.data?.message || `No product found for "${code}"`);
+            }
         }
         setBarcode('');
         barcodeRef.current?.focus();
@@ -193,25 +264,58 @@ export default function CashierPage() {
         [cart, vatSettings]
     );
 
-    // ---- Checkout: creates the Order + Receipt (unpaid), then opens payment ----
+    // ---- Checkout: online creates the Order + Receipt (unpaid), then opens
+    // payment as before. Offline skips the server round trip entirely —
+    // there's nothing to round-trip to — and opens the local cash-only
+    // confirmation instead. ----
     const handleCheckout = async () => {
         if (cart.length === 0) return toast.error('Cart is empty');
         if (!shift) return toast.error('Open your shift before taking sales');
+
+        if (!isOnline) {
+            setShowOfflinePayment(true);
+            return;
+        }
 
         setCheckingOut(true);
         try {
             const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass }) => ({
                 productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass,
             }));
+            const clientSaleId = crypto.randomUUID();
             // subtotal sent here is just a display hint — the server always
             // recomputes it (and the VAT/totalDue figures) from `items` itself.
-            const res = await API.post('/orders', { items, subtotal: netSubtotal, branch: user.branch });
+            const res = await API.post('/orders', { items, subtotal: netSubtotal, branch: user.branch, clientSaleId });
             setReceipt(res.data.receipt);
             setShowPayment(true);
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to start checkout');
+            if (!err.response) {
+                // The request never reached the server at all — treat this
+                // exactly like starting out offline, rather than showing a
+                // generic error and leaving the cashier stuck.
+                setShowOfflinePayment(true);
+            } else {
+                toast.error(err.response?.data?.message || 'Failed to start checkout');
+            }
         }
         setCheckingOut(false);
+    };
+
+    // ---- Confirms an offline cash sale: no server call, just writes the
+    // sale to the local queue and clears the cart immediately so the
+    // cashier can keep ringing up the next customer without delay. ----
+    const handleOfflineCashConfirm = async () => {
+        const sale = buildOfflineSale({
+            cart,
+            branch: user.branch,
+            shiftId: shift?._id,
+            totalDue,
+        });
+        await queueOfflineSale(sale);
+        setShowOfflinePayment(false);
+        clearCart();
+        refreshPendingCount();
+        toast.success("Sale saved — will sync automatically once you're back online");
     };
 
     const handlePaymentComplete = () => {
@@ -298,6 +402,12 @@ export default function CashierPage() {
 
     return (
         <div className="h-screen flex flex-col bg-gray-100">
+            <OfflineBanner
+                isOnline={isOnline}
+                pendingCount={pendingSyncCount}
+                syncing={syncing}
+                onSyncNow={runSync}
+            />
             {/* HEADER */}
             <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -512,10 +622,16 @@ export default function CashierPage() {
             {showPayment && receipt && (
                 <PaymentModal receipt={receipt} onClose={handleCancelCheckout} onComplete={handlePaymentComplete} />
             )}
+            <OfflineCashPaymentModal
+                open={showOfflinePayment}
+                onClose={() => setShowOfflinePayment(false)}
+                totalDue={totalDue}
+                onConfirm={handleOfflineCashConfirm}
+            />
             <CloseShiftModal open={showCloseShift} shiftId={shift?._id} onClose={() => setShowCloseShift(false)}
                 onClosed={() => { setShowCloseShift(false); navigate('/login'); logout(); }} />
             <VoidRequestModal open={showVoid} branch={user.branch} onClose={() => setShowVoid(false)} />
             <HistoryModal open={showHistory} branch={user.branch} onClose={() => setShowHistory(false)} />
         </div>
     );
-        }
+}
