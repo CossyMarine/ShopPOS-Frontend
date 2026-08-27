@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Boxes } from 'lucide-react';
+import { Plus, Boxes, PackagePlus } from 'lucide-react';
 import { toast } from 'react-toastify';
 import imageCompression from 'browser-image-compression';
 import API from '../../api/axios';
@@ -36,6 +36,7 @@ export default function ProductManagement({ branch }) {
     const [receivingFor, setReceivingFor] = useState(null);
     const [stockForm, setStockForm] = useState(EMPTY_STOCK);
     const [receiving, setReceiving] = useState(false);
+    const [showReceivePicker, setShowReceivePicker] = useState(false);
     const [labelFor, setLabelFor] = useState(null);
     const [adjustingFor, setAdjustingFor] = useState(null);
 
@@ -245,6 +246,7 @@ export default function ProductManagement({ branch }) {
                         quantity: parseFloat(form.openingQty),
                         costPerUnit: parseFloat(form.openingCost),
                         receivedAs: isBulk ? form.openingReceivedAs : 'each',
+                        expiryDate: form.openingExpiryDate || null,
                     });
                     toast.success('Product added with opening stock');
                 } else {
@@ -360,6 +362,12 @@ export default function ProductManagement({ branch }) {
                         <Boxes size={15} /> Manage Units
                     </button>
                     <button
+                        onClick={() => setShowReceivePicker(true)}
+                        className="flex items-center gap-2 bg-white border border-gray-200 hover:border-orange-400 text-sm font-bold text-gray-700 hover:text-orange-500 px-4 py-2 rounded-xl shadow-sm transition-colors"
+                    >
+                        <PackagePlus size={15} /> Receive Stock
+                    </button>
+                    <button
                         onClick={openAddModal}
                         className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange-hover text-white px-4 py-2 rounded-xl text-sm font-extrabold shadow-sm transition"
                     >
@@ -439,9 +447,23 @@ export default function ProductManagement({ branch }) {
 
             <ReceiveStockModal
                 receivingFor={receivingFor}
+                pickerOpen={showReceivePicker}
+                productOptions={products}
+                onPickProduct={(item) => {
+                    if (item) {
+                        setReceivingFor(item);
+                        setStockForm(EMPTY_STOCK);
+                        setShowReceivePicker(false);
+                    } else {
+                        // back-arrow from the form (only reachable when opened via
+                        // the picker) — deselect and show the search list again
+                        setReceivingFor(null);
+                        setShowReceivePicker(true);
+                    }
+                }}
                 stockForm={stockForm}
                 setStockForm={setStockForm}
-                onClose={() => { setReceivingFor(null); setStockForm(EMPTY_STOCK); }}
+                onClose={() => { setReceivingFor(null); setStockForm(EMPTY_STOCK); setShowReceivePicker(false); }}
                 onSubmit={submitStock}
                 receiving={receiving}
                 stockPreview={stockPreview}
@@ -475,4 +497,4 @@ export default function ProductManagement({ branch }) {
             `}</style>
         </div>
     );
-                            }
+           }
