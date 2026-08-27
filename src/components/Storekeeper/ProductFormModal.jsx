@@ -179,6 +179,10 @@ export default function ProductFormModal({
                                 </label>
                                 <input type="number" value={form.openingCost} onChange={(e) => setForm({ ...form, openingCost: e.target.value })} placeholder="e.g. 300" className="input font-bold" />
                             </div>
+                            <div>
+                                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Expiry Date (optional)</label>
+                                <input type="date" value={form.openingExpiryDate} onChange={(e) => setForm({ ...form, openingExpiryDate: e.target.value })} className="input font-bold" />
+                            </div>
 
                             {showProfitPreview && (
                                 <div className="bg-white p-3 rounded-xl border border-green-200 text-[11px] font-semibold space-y-1 text-gray-600">
