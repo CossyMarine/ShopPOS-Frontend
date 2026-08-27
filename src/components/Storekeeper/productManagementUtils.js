@@ -22,7 +22,7 @@ export const EMPTY_FORM = {
     sellingPrice: '', reorderLevel: '',
     isBulk: false, packSize: '10', caseLabel: 'Carton', caseBarcode: '', casePrice: '',
     imageUrl: '', imagePublicId: '',
-    openingQty: '', openingCost: '', openingReceivedAs: 'each',
+    openingQty: '', openingCost: '', openingReceivedAs: 'each',openingExpiryDate: '',
     vatClass: 'standard',
 };
 export const EMPTY_STOCK = { quantity: '', costPerUnit: '', expiryDate: '', supplierNote: '', receivedAs: 'each' };
