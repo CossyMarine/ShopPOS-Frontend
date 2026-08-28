@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, ShieldAlert, ImageIcon, History } from 'lucide-react';
+import { RefreshCw, ShieldAlert, ImageIcon, History, Clock } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import ConfirmModal from './ConfirmModal';
@@ -11,9 +11,10 @@ const REASON_LABEL = {
 };
 
 export default function StockAdjustmentsView({ branch } = {}) {
-    const [tab, setTab] = useState('pending'); // 'pending' | 'audit'
+    const [tab, setTab] = useState('pending'); // 'pending' | 'audit' | 'byShift'
     const [requests, setRequests] = useState([]);
     const [auditLogs, setAuditLogs] = useState([]);
+    const [byShift, setByShift] = useState([]);
     const [loading, setLoading] = useState(false);
     const [photoPreview, setPhotoPreview] = useState(null);
     const [pendingAction, setPendingAction] = useState(null); // { request, action }
@@ -42,8 +43,21 @@ export default function StockAdjustmentsView({ branch } = {}) {
         setLoading(false);
     };
 
+    const fetchByShift = async () => {
+        setLoading(true);
+        try {
+            const res = await API.get('/stock-adjustments/shrinkage-by-shift', { params: branch ? { branch } : {} });
+            setByShift(res.data);
+        } catch {
+            toast.error('Failed to load shrinkage by shift');
+        }
+        setLoading(false);
+    };
+
     useEffect(() => {
-        tab === 'pending' ? fetchPending() : fetchAudit();
+        if (tab === 'pending') fetchPending();
+        else if (tab === 'audit') fetchAudit();
+        else fetchByShift();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [branch, tab]);
 
@@ -70,7 +84,7 @@ export default function StockAdjustmentsView({ branch } = {}) {
                     <h2 className="text-2xl font-black text-gray-800">Stock Loss & Adjustments</h2>
                     <p className="text-sm text-gray-500">Approve write-offs and review the full adjustment history</p>
                 </div>
-                <button onClick={() => (tab === 'pending' ? fetchPending() : fetchAudit())}
+                <button onClick={() => (tab === 'pending' ? fetchPending() : tab === 'audit' ? fetchAudit() : fetchByShift())}
                     className="flex items-center gap-1.5 bg-white border border-gray-200 hover:border-orange-500/40 text-gray-500 hover:text-orange-500 px-3 py-2 rounded-lg text-sm font-semibold shadow-sm">
                     <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
                 </button>
@@ -84,6 +98,10 @@ export default function StockAdjustmentsView({ branch } = {}) {
                 <button onClick={() => setTab('audit')}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${tab === 'audit' ? 'bg-gray-800 text-white' : 'text-gray-500'}`}>
                     <History size={13} /> Audit Log
+                </button>
+                <button onClick={() => setTab('byShift')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${tab === 'byShift' ? 'bg-orange-500 text-white' : 'text-gray-500'}`}>
+                    <Clock size={13} /> By Shift
                 </button>
             </div>
 
@@ -134,7 +152,7 @@ export default function StockAdjustmentsView({ branch } = {}) {
                         </tbody>
                     </table>
                 </div>
-            ) : (
+            ) : tab === 'audit' ? (
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead>
@@ -173,6 +191,53 @@ export default function StockAdjustmentsView({ branch } = {}) {
                         </tbody>
                     </table>
                 </div>
+            ) : (
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="text-gray-400 font-semibold border-b border-gray-100">
+                                <th className="p-3">Shift</th>
+                                <th className="p-3">Losses</th>
+                                <th className="p-3">Total Qty</th>
+                                <th className="p-3">Cost Impact</th>
+                                <th className="p-3">Breakdown</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-gray-600">
+                            {byShift.length === 0 ? (
+                                <tr><td colSpan={5} className="p-10 text-center text-gray-400 font-medium">No approved shrinkage yet</td></tr>
+                            ) : byShift.map((row) => (
+                                <tr key={row.shiftId || 'no-shift'} className="hover:bg-gray-50/70">
+                                    <td className="p-3">
+                                        {row.shift ? (
+                                            <>
+                                                <p className="font-bold text-gray-800">{row.shift.openedBy || '—'}</p>
+                                                <p className="text-xs text-gray-400">
+                                                    {formatKenyanDateTime(row.shift.openedAt)}
+                                                    {row.shift.branchName ? ` · ${row.shift.branchName}` : ''}
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <span className="text-xs text-gray-400 italic">No shift attached</span>
+                                        )}
+                                    </td>
+                                    <td className="p-3 font-mono">{row.adjustmentCount}</td>
+                                    <td className="p-3 font-mono">{row.totalQuantity}</td>
+                                    <td className="p-3 font-mono font-bold text-red-500">KES {row.totalCostImpact.toLocaleString()}</td>
+                                    <td className="p-3">
+                                        <div className="flex flex-wrap gap-1">
+                                            {Object.entries(row.reasonBreakdown).map(([reason, count]) => (
+                                                <span key={reason} className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100">
+                                                    {REASON_LABEL[reason] || reason} × {count}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             )}
 
             {photoPreview && (
@@ -203,4 +268,4 @@ export default function StockAdjustmentsView({ branch } = {}) {
             />
         </div>
     );
-              }
+                                    }
