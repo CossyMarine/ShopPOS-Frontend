@@ -3,8 +3,17 @@ import { Save, RefreshCw, Store, Landmark, MessageCircle, Gift, Percent } from '
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 
+const TIMEZONES = [
+    'Africa/Nairobi', 'Africa/Kampala', 'Africa/Dar_es_Salaam', 'Africa/Kigali', 'Africa/Lagos',
+    'Africa/Johannesburg', 'Europe/London', 'Asia/Dubai', 'America/New_York',
+];
+
 const EMPTY = {
     storeName: '',
+    currency: 'KES',
+    timezone: 'Africa/Nairobi',
+    openHour: 8,
+    closeHour: 21,
     tillNumber: '',
     tillName: '',
     whatsappNumber: '',
@@ -34,6 +43,10 @@ export default function SettingsManagement() {
             const res = await API.get('/settings');
             setForm({
                 storeName: res.data.storeName || '',
+                currency: res.data.currency || 'KES',
+                timezone: res.data.timezone || 'Africa/Nairobi',
+                openHour: res.data.openHour ?? 8,
+                closeHour: res.data.closeHour ?? 21,
                 tillNumber: res.data.tillNumber || '',
                 tillName: res.data.tillName || '',
                 whatsappNumber: res.data.whatsappNumber || '',
@@ -66,9 +79,16 @@ export default function SettingsManagement() {
     const setVat = (patch) => setForm((f) => ({ ...f, vat: { ...f.vat, ...patch } }));
 
     const handleSave = async () => {
+        const open = Number(form.openHour);
+        const close = Number(form.closeHour);
+        if (!Number.isInteger(open) || !Number.isInteger(close) || open < 0 || close > 23 || close <= open) {
+            toast.error('Closing hour must be later than opening hour (0 to 23)');
+            return;
+        }
+
         setSaving(true);
         try {
-            await API.patch('/settings', form);
+            await API.patch('/settings', { ...form, openHour: open, closeHour: close });
             toast.success('Settings saved');
         } catch (err) {
             console.error('Failed to save settings', err);
@@ -80,6 +100,8 @@ export default function SettingsManagement() {
     if (loading) {
         return <p className="text-gray-400 text-sm">Loading settings…</p>;
     }
+
+    const cur = form.currency || 'KES';
 
     return (
         <div className="space-y-8 bg-gray-50 text-gray-800">
@@ -98,7 +120,7 @@ export default function SettingsManagement() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Payment & contact */}
+                {/* Store, payment & contact */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-5">
                     <h3 className="text-base font-black text-gray-800 border-b border-gray-100 pb-3 flex items-center gap-2">
                         <Store size={16} className="text-orange-500" />
@@ -109,10 +131,60 @@ export default function SettingsManagement() {
                             value={form.storeName}
                             onChange={(e) => setForm({ ...form, storeName: e.target.value })}
                             placeholder="e.g. Babylon Supermarket"
+                            maxLength={80}
                             className="input"
                         />
-                        <p className="text-[11px] text-gray-400 mt-1">Printed on barcode labels and receipts</p>
+                        <p className="text-[11px] text-gray-400 mt-1">Shown on the admin dashboard and printed on barcode labels and receipts</p>
                     </Field>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Field label="Currency">
+                            <input
+                                value={form.currency}
+                                onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
+                                placeholder="KES"
+                                maxLength={6}
+                                className="input"
+                            />
+                        </Field>
+                        <Field label="Timezone">
+                            <input
+                                list="tz-list"
+                                value={form.timezone}
+                                onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+                                placeholder="Africa/Nairobi"
+                                className="input"
+                            />
+                            <datalist id="tz-list">
+                                {TIMEZONES.map((z) => (
+                                    <option key={z} value={z} />
+                                ))}
+                            </datalist>
+                        </Field>
+                        <Field label="Opens (hour, 0-23)">
+                            <input
+                                type="number"
+                                min="0"
+                                max="23"
+                                value={form.openHour}
+                                onChange={(e) => setForm({ ...form, openHour: e.target.value })}
+                                className="input"
+                            />
+                        </Field>
+                        <Field label="Closes (hour, 0-23)">
+                            <input
+                                type="number"
+                                min="0"
+                                max="23"
+                                value={form.closeHour}
+                                onChange={(e) => setForm({ ...form, closeHour: e.target.value })}
+                                className="input"
+                            />
+                        </Field>
+                    </div>
+                    <p className="text-[11px] text-gray-400 -mt-2">
+                        Used by the dashboard for the currency, the hourly chart and the busy-hours grid. Use 24-hour numbers, e.g. 8 = 8am, 21 = 9pm.
+                    </p>
 
                     <h3 className="text-base font-black text-gray-800 border-b border-gray-100 pb-3 pt-2 flex items-center gap-2">
                         <Landmark size={16} className="text-orange-500" />
@@ -167,6 +239,7 @@ export default function SettingsManagement() {
                             Reward Program
                         </h3>
                         <button
+                            type="button"
                             onClick={() => setReward({ enabled: !form.reward.enabled })}
                             className={`relative w-11 h-6 rounded-full transition-colors ${form.reward.enabled ? 'bg-orange-500' : 'bg-gray-300'}`}
                         >
@@ -190,7 +263,7 @@ export default function SettingsManagement() {
                         <p className="text-[11px] text-gray-400 mt-1">% of every payment converted to reward points</p>
                     </Field>
 
-                    <Field label="Point Value (KES)">
+                    <Field label={`Point Value (${cur})`}>
                         <input
                             type="number"
                             min="0.01"
@@ -200,7 +273,7 @@ export default function SettingsManagement() {
                             className="input"
                         />
                         <p className="text-[11px] text-gray-400 mt-1">
-                            KES value of 1 point on redemption — e.g. 1 (1 pt = KSh 1) or 100 (1 pt = KSh 100)
+                            {cur} value of 1 point on redemption, e.g. 1 (1 pt = {cur} 1) or 100 (1 pt = {cur} 100)
                         </p>
                     </Field>
 
@@ -219,7 +292,7 @@ export default function SettingsManagement() {
                         <textarea
                             value={form.reward.description}
                             onChange={(e) => setReward({ description: e.target.value })}
-                            placeholder="e.g. Earn 1 point for every 10 KES spent — redeem 2000+ points against any bill."
+                            placeholder={`e.g. Earn 1 point for every 10 ${cur} spent. Redeem 2000+ points against any bill.`}
                             rows={3}
                             className="input"
                         />
@@ -235,6 +308,7 @@ export default function SettingsManagement() {
                             VAT
                         </h3>
                         <button
+                            type="button"
                             onClick={() => setVat({ enabled: !form.vat.enabled })}
                             className={`relative w-11 h-6 rounded-full transition-colors ${form.vat.enabled ? 'bg-orange-500' : 'bg-gray-300'}`}
                         >
@@ -248,7 +322,7 @@ export default function SettingsManagement() {
 
                     {!form.vat.enabled && (
                         <p className="text-[11px] text-orange-600 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2">
-                            VAT is off — items sell at their listed price with no tax added or shown on receipts.
+                            VAT is off. Items sell at their listed price with no tax added or shown on receipts.
                         </p>
                     )}
 
@@ -291,13 +365,13 @@ export default function SettingsManagement() {
                         </div>
                         <p className="text-[11px] text-gray-400 mt-1">
                             {form.vat.priceMode === 'exclusive'
-                                ? 'Product selling prices exclude VAT — it is added at checkout, shown as a separate line on the receipt.'
-                                : 'Product selling prices already include VAT — the receipt shows the VAT portion for reporting, but the customer pays exactly the listed price.'}
+                                ? 'Product selling prices exclude VAT. It is added at checkout and shown as a separate line on the receipt.'
+                                : 'Product selling prices already include VAT. The receipt shows the VAT portion for reporting, but the customer pays exactly the listed price.'}
                         </p>
                     </Field>
 
                     <p className="text-[11px] text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                        Individual products can be marked Zero-rated or Exempt (e.g. maize flour, milk) in the product form — this rate only applies to Standard-rated items.
+                        Individual products can be marked Zero-rated or Exempt (e.g. maize flour, milk) in the product form. This rate only applies to Standard-rated items.
                     </p>
                 </div>
             </div>
@@ -344,4 +418,4 @@ function Field({ label, children }) {
             {children}
         </div>
     );
-                                }
+            }
