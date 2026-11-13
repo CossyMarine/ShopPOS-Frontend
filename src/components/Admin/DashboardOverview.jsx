@@ -1,444 +1,577 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import { io } from 'socket.io-client';
+import { toast } from 'react-toastify';
+import { Eye } from 'lucide-react';
 import {
-    Eye, RefreshCw, ShieldAlert, Wallet, ReceiptText, Users,
-    TrendingUp, TrendingDown, PackageX, CircleDollarSign,
-} from 'lucide-react';
-import {
-    ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-    PieChart, Pie, Cell, Legend,
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import API from '../../api/axios';
+import { useAuth } from '../../hooks/useAuth';
 import ViewItemsModal from './ViewItemsModal';
-import { kenyanDayBound, formatKenyanDateTime } from '../../utils/formatDate';
+import Reminders from './Reminders';
+import {
+  DAYS, PAY, money, num, short, hr, sum, setStoreConfig, formatDateTime,
+} from '../../utils/dashboardHelpers';
 
-const PAYMENT_LABELS = {
-    cash: 'Cash',
-    mpesa_till: 'M-Pesa Till',
-    mpesa_paybill: 'M-Pesa Paybill',
-    mpesa_pochi: 'M-Pesa Pochi',
-    mpesa_stk: 'M-Pesa STK',
-    manual_till: 'Manual Till',
-    reward: 'Reward Points',
-    both: 'Cash + Till',
-    unknown: 'Unrecorded',
+const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+
+const THEMES = {
+  classic: {
+    label: 'Green', rgb: '22,163,74', accent: '#16a34a', ink: '#0F172A',
+    palette: ['#16a34a', '#f59e0b', '#2563eb', '#8b5cf6', '#ef4444', '#94a3b8', '#64748B'],
+    metric: { sales: '#16a34a', customers: '#8b5cf6', profit: '#f59e0b' },
+  },
+  brand: {
+    label: 'Orange', rgb: '255,87,34', accent: '#FF5722', ink: '#0A0A0A',
+    palette: ['#FF5722', '#0A0A0A', '#94A3B8', '#FDBA74', '#CBD5E1', '#64748B', '#FFCCBC'],
+    metric: { sales: '#FF5722', customers: '#0A0A0A', profit: '#64748B' },
+  },
+  mono: {
+    label: 'Black', rgb: '10,10,10', accent: '#0A0A0A', ink: '#0A0A0A',
+    palette: ['#0A0A0A', '#404040', '#737373', '#A3A3A3', '#D4D4D4', '#525252', '#E5E5E5'],
+    metric: { sales: '#525252', customers: '#737373', profit: '#A3A3A3' },
+  },
 };
+const METRICS = {
+  sales: { name: 'Revenue', series: 'revenue', money: true },
+  customers: { name: 'Customers', series: 'customers', money: false },
+  profit: { name: 'Profit (est.)', series: 'profit', money: true },
+};
+const RANGES = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['year', 'This Year'], ['all', 'All']];
 
-const PAYMENT_COLORS = ['#FF5722', '#0A0A0A', '#CBD5E1', '#FF8A65', '#94A3B8', '#FFCCBC', '#64748B'];
-const CATEGORY_COLORS = ['#FF5722', '#FF8A65', '#FFCCBC', '#0A0A0A', '#94A3B8', '#64748B', '#FDBA74'];
+/* ================= data ================= */
+async function fetchDashboard(range, branch) {
+  const params = branch ? { branch } : {};
+  const { data: d } = await API.get('/analytics/dashboard', { params: { range, ...params } });
+  const [mg, dead] = await Promise.allSettled([
+    API.get('/analytics/category-margin', { params: { ...d.query, ...params } }),
+    API.get('/analytics/dead-stock', { params: { days: 30, ...params } }),
+  ]);
+  return {
+    ...d,
+    categories: mg.status === 'fulfilled' ? mg.value.data.categories || [] : [],
+    dead: dead.status === 'fulfilled' ? dead.value.data : { items: [], totalValueTiedUp: 0 },
+  };
+}
 
+/* ================= page ================= */
 export default function DashboardOverview({ branch } = {}) {
-    const [revenueToday, setRevenueToday] = useState({ totalRevenue: 0, paidReceiptsCount: 0 });
-    const [revenueSummary, setRevenueSummary] = useState({ totalRevenue: 0, totalReceipts: 0 });
-    const [staffCount, setStaffCount] = useState(0);
-    const [unpaid, setUnpaid] = useState([]);
-    const [paid, setPaid] = useState([]);
-    const [voidCount, setVoidCount] = useState(0);
-    const [stats, setStats] = useState({
-        dailyTrend: [],
-        monthRevenue: 0,
-        monthReceiptsCount: 0,
-        paymentBreakdown: [],
-        categoryBreakdown: [],
-        lowStockCount: 0,
-        netProfit: 0,
-        netProfitMargin: 0,
-        voidedToday: { amount: 0, count: 0 },
-    });
-    const [loading, setLoading] = useState(true);
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
-    const [viewing, setViewing] = useState(null);
+  const { user, setUser } = useAuth();
+  const saved = user?.dashboardPrefs || {};
 
-    const fetchAll = async () => {
-        setLoading(true);
-        try {
-            const branchParams = branch ? { branch } : {};
-            const [rev, summary, staff, unpaidRes, paidRes, voidsRes, statsRes] = await Promise.all([
-                API.get('/revenue/today', { params: branchParams }),
-                API.get('/revenue/summary', { params: branchParams }),
-                API.get('/auth/staff-count'),
-                API.get('/receipts', { params: branchParams }),
-                API.get('/receipts/paid', { params: branchParams }),
-                API.get('/void-requests', { params: branchParams }),
-                API.get('/revenue/dashboard-stats', { params: branchParams }),
-            ]);
-            setRevenueToday(rev.data);
-            setRevenueSummary(summary.data);
-            setStaffCount(staff.data.totalStaff || 0);
-            setUnpaid(unpaidRes.data);
-            setPaid(paidRes.data);
-            setVoidCount(voidsRes.data.length);
-            setStats(statsRes.data);
-        } catch (err) {
-            console.error('Failed to load dashboard metrics', err);
-        }
-        setLoading(false);
-    };
+  const [range, setRange] = useState('today');
+  const [metric, setMetric] = useState('sales');
+  // Theme and chart style are saved on the user's account, so they stay until changed again
+  const [theme, setThemeState] = useState(THEMES[saved.theme] ? saved.theme : 'classic');
+  const [style, setStyleState] = useState(saved.chartStyle === 'bar' ? 'bar' : 'line');
+  const [D, setD] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [updated, setUpdated] = useState('');
+  const [viewing, setViewing] = useState(null);
+  const [rmOpen, setRmOpen] = useState(false);
+  const [rmDue, setRmDue] = useState(0);
 
-    useEffect(() => {
-        fetchAll();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [branch]);
+  const T = THEMES[theme];
 
-    const combined = useMemo(() => {
-        const all = [...unpaid, ...paid].sort(
-            (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-        );
+  const savePref = async (patch) => {
+    try {
+      const res = await API.patch('/auth/dashboard-prefs', patch);
+      setUser?.(res.data.user);
+    } catch {
+      toast.error('Could not save your display preference');
+    }
+  };
+  const pickTheme = (t) => { if (t === theme) return; setThemeState(t); savePref({ theme: t }); };
+  const pickStyle = (s) => { if (s === style) return; setStyleState(s); savePref({ chartStyle: s }); };
 
-        if (!dateFrom && !dateTo) return all.slice(0, 15);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await fetchDashboard(range, branch);
+      setStoreConfig(d.store);             // currency + timezone from Settings
+      setD(d);
+      setError('');
+      setUpdated(formatDateTime(Date.now(), { hour: '2-digit', minute: '2-digit' }));
+    } catch (e) {
+      console.error('Dashboard load failed', e);
+      setError(e.response?.data?.message || 'Could not load dashboard data. Check your connection and try Refresh.');
+    }
+    setLoading(false);
+  }, [range, branch]);
 
-        // Anchored to the Kenyan calendar day the picker value falls on,
-        // not the browser's own timezone.
-        const from = kenyanDayBound(dateFrom, 'start');
-        const to = kenyanDayBound(dateTo, 'end');
+  useEffect(() => { load(); }, [load]);
 
-        return all.filter((r) => {
-            const created = new Date(r.createdAt);
-            if (from && created < from) return false;
-            if (to && created > to) return false;
-            return true;
-        });
-    }, [unpaid, paid, dateFrom, dateTo]);
+  // live refresh (debounced)
+  useEffect(() => {
+    const sock = io(SOCKET_URL, { withCredentials: true });
+    if (branch) sock.emit('join_room', `branch:${branch}`);
+    let t;
+    const kick = () => { clearTimeout(t); t = setTimeout(load, 1500); };
+    ['receipt:paid', 'receipt:updated', 'receipt:manualPending', 'receipt:manualPaymentResolved', 'sale:created']
+      .forEach((e) => sock.on(e, kick));
+    return () => { clearTimeout(t); sock.disconnect(); };
+  }, [branch, load]);
 
-    // When no date filter is applied, the stat card shows this month's
-    // total (Kenyan calendar month, from dashboard-stats). Otherwise it
-    // shows the sum of paid receipts within the picked range.
-    const filteredRevenue = useMemo(() => {
-        if (!dateFrom && !dateTo) return stats.monthRevenue;
-        return combined
-            .filter((r) => r.status === 'paid')
-            .reduce((sum, r) => sum + r.subtotal, 0);
-    }, [combined, dateFrom, dateTo, stats.monthRevenue]);
+  const onDue = useCallback((n) => setRmDue(n), []);
 
-    const paymentChartData = useMemo(
-        () => stats.paymentBreakdown.map((p) => ({
-            name: PAYMENT_LABELS[p.method] || p.method,
-            value: p.amount,
-        })),
-        [stats.paymentBreakdown]
-    );
-
-    const categoryChartData = useMemo(
-        () => stats.categoryBreakdown.map((c) => ({ name: c.category, value: c.amount })),
-        [stats.categoryBreakdown]
-    );
-
-    const paymentInfo = (r) =>
-        r.status === 'paid'
-            ? {
-                  method: r.paymentMethod,
-                  cashAmount: r.cashAmount,
-                  tillAmount: r.tillAmount,
-                  changeGiven: r.changeGiven,
-                  mpesaReceiptNumber: r.mpesaReceiptNumber,
-                  paidAt: r.paidAt,
-              }
-            : null;
-
-    return (
-        <div className="space-y-8 bg-gray-50 min-h-screen p-1 text-gray-800">
-            <div className="flex flex-wrap justify-between items-center gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Retail Admin Dashboard</h2>
-                    <p className="text-sm text-gray-500">
-                        {branch ? 'Monitoring real-time sales for this branch.' : 'Monitoring real-time sales across all branches.'}
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-2 bg-white border border-gray-200 p-2 rounded-lg text-sm shadow-sm">
-                    <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange"
-                    />
-                    <span className="text-gray-400">to</span>
-                    <input
-                        type="date"
-                        value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-orange/20 focus:border-brand-orange"
-                    />
-                    <button
-                        onClick={fetchAll}
-                        className="flex items-center gap-1.5 bg-brand-orange hover:bg-brand-orange-hover text-white px-3 py-1 rounded font-semibold transition-colors shadow-sm"
-                    >
-                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                        Refresh
-                    </button>
-                </div>
-            </div>
-
-            {/* STAT CARDS — matches mockup: This Month's Sales / Net Profit / Refunds & Voids / Low Stock */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <StatCard
-                    icon={Wallet}
-                    iconBg="bg-brand-orange-light text-brand-orange"
-                    label={dateFrom || dateTo ? "Sales (filtered)" : "This Month's Sales"}
-                    value={`KES ${filteredRevenue.toLocaleString()}`}
-                    sub={`${combined.length} receipts`}
-                    subColor="text-green-600"
-                />
-                <StatCard
-                    icon={TrendingUp}
-                    iconBg="bg-green-50 text-green-600"
-                    label="Net Profit (est.)"
-                    value={`KES ${stats.netProfit.toLocaleString()}`}
-                    sub={`${stats.netProfitMargin}% margin`}
-                    subColor="text-green-600"
-                />
-                <StatCard
-                    icon={TrendingDown}
-                    iconBg="bg-red-50 text-red-600"
-                    label="Refunds & Voids"
-                    value={`KES ${stats.voidedToday.amount.toLocaleString()}`}
-                    sub={`${stats.voidedToday.count} voided today · ${voidCount} pending`}
-                    subColor="text-red-500"
-                />
-                <StatCard
-                    icon={PackageX}
-                    iconBg="bg-amber-50 text-amber-600"
-                    label="Low Stock Warning"
-                    value={`${stats.lowStockCount} Products`}
-                    sub="Action required"
-                    subColor="text-amber-600"
-                />
-            </section>
-
-            {/* DAILY SALES REVENUE CHART — one bar per day of the current month */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
-                    <div>
-                        <h3 className="font-bold text-gray-900">Daily Sales Revenue</h3>
-                        <p className="text-xs text-gray-500">Day-by-day sales performance for this month</p>
-                    </div>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-orange-light text-brand-orange">
-                        Live Revenue (KES)
-                    </span>
-                </div>
-                <div className="h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={stats.dailyTrend}>
-                            <CartesianGrid vertical={false} stroke="#F1F5F9" />
-                            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                            <YAxis
-                                tick={{ fontSize: 11, fill: '#64748B' }}
-                                axisLine={false}
-                                tickLine={false}
-                                tickFormatter={(v) => `${v.toLocaleString()}`}
-                            />
-                            <Tooltip
-                                formatter={(v) => [`KES ${Number(v).toLocaleString()}`, 'Revenue']}
-                                cursor={{ fill: '#FFF0EB' }}
-                            />
-                            <Bar dataKey="revenue" name="Revenue" fill="#FF5722" radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
-            {/* PAYMENT BREAKDOWN + CATEGORY SHARE */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col justify-between">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 className="font-bold text-gray-900">Payment Breakdown</h3>
-                            <p className="text-xs text-gray-500">Sales volume by Cash, M-Pesa STK, and Card</p>
-                        </div>
-                        <span className="text-xs font-medium text-brand-orange bg-brand-orange-light px-3 py-1 rounded-full">
-                            This Month
-                        </span>
-                    </div>
-                    <div className="h-64 w-full">
-                        {paymentChartData.length === 0 ? (
-                            <EmptyChartState label="No payments recorded yet this month" />
-                        ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={paymentChartData}
-                                        dataKey="value"
-                                        nameKey="name"
-                                        innerRadius="65%"
-                                        outerRadius="90%"
-                                        paddingAngle={2}
-                                    >
-                                        {paymentChartData.map((entry, i) => (
-                                            <Cell key={entry.name} fill={PAYMENT_COLORS[i % PAYMENT_COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip formatter={(v) => `KES ${Number(v).toLocaleString()}`} />
-                                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        )}
-                    </div>
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col justify-between">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 className="font-bold text-gray-900">Category Share</h3>
-                            <p className="text-xs text-gray-500">Top selling product categories across branches</p>
-                        </div>
-                        <span className="text-xs font-medium text-brand-orange bg-brand-orange-light px-3 py-1 rounded-full">
-                            This Month
-                        </span>
-                    </div>
-                    <div className="h-64 w-full">
-                        {categoryChartData.length === 0 ? (
-                            <EmptyChartState label="No sales recorded yet this month" />
-                        ) : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={categoryChartData}
-                                        dataKey="value"
-                                        nameKey="name"
-                                        innerRadius="65%"
-                                        outerRadius="90%"
-                                        paddingAngle={2}
-                                    >
-                                        {categoryChartData.map((entry, i) => (
-                                            <Cell key={entry.name} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip formatter={(v) => `KES ${Number(v).toLocaleString()}`} />
-                                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* LIFETIME TOTALS (existing metrics, kept) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <MetricCard
-                    icon={TrendingUp}
-                    label={branch ? 'Total Revenue (Branch)' : 'Total Revenue'}
-                    value={`KES ${(revenueSummary.totalRevenue || 0).toLocaleString()}`}
-                />
-                <MetricCard
-                    icon={ReceiptText}
-                    label={branch ? 'Total Receipts (Branch)' : 'Total Receipts'}
-                    value={(revenueSummary.totalReceipts || 0).toLocaleString()}
-                />
-                <MetricCard
-                    icon={Users}
-                    label="Total Staff"
-                    value={staffCount}
-                />
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm overflow-hidden">
-                <h3 className="text-lg font-black text-gray-800 mb-4">Recent Receipts</h3>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead>
-                            <tr className="text-gray-400 font-semibold border-b border-gray-100">
-                                <th className="p-3">Bill ID</th>
-                                <th className="p-3">Cashier</th>
-                                <th className="p-3">Branch</th>
-                                <th className="p-3">Amount</th>
-                                <th className="p-3">Date</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3 text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 text-gray-600">
-                            {combined.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="p-6 text-center text-gray-400 font-medium">
-                                        No receipts in this range
-                                    </td>
-                                </tr>
-                            ) : (
-                                combined.map((r) => (
-                                    <tr key={r._id} className="hover:bg-gray-50/70 transition-colors">
-                                        <td className="p-3 font-bold text-brand-orange">{r.billId}</td>
-                                        <td className="p-3 font-medium">{r.cashierName || '—'}</td>
-                                        <td className="p-3 font-semibold">{r.branch?.name || '—'}</td>
-                                        <td className="p-3 font-bold text-gray-800">KES {r.subtotal.toLocaleString()}</td>
-                                        <td className="p-3 text-xs text-gray-400">
-                                            {formatKenyanDateTime(r.createdAt)}
-                                        </td>
-                                        <td className="p-3">
-                                            <StatusPill status={r.status} />
-                                        </td>
-                                        <td className="p-3 text-right">
-                                            <button
-                                                onClick={() => setViewing(r)}
-                                                className="inline-flex items-center gap-1 text-gray-400 hover:text-brand-orange text-xs font-semibold transition-colors"
-                                            >
-                                                <Eye size={14} /> View
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <ViewItemsModal
-                open={!!viewing}
-                onClose={() => setViewing(null)}
-                title={viewing?.billId}
-                subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
-                items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
-                total={viewing?.subtotal}
-                payment={viewing ? paymentInfo(viewing) : null}
-            />
+  return (
+    <div className={`dash rounded-3xl p-4 lg:p-6 space-y-6 text-ink min-h-full pb-24 ${loading ? 'busy' : ''}`} data-theme={theme}>
+      {/* HEADER */}
+      <header className="dcard px-6 py-4 flex flex-wrap items-center gap-4">
+        <div className="flex-1 min-w-[200px]">
+          <h1 className="text-accent font-hand text-4xl leading-none font-bold">{D?.store.name || 'Store Dashboard'}</h1>
+          <p className="text-xs text-slate-500 mt-1">
+            {D ? formatDateTime(Date.now(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}
+          </p>
         </div>
-    );
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wider text-slate-400">Theme</span>
+          <div className="dseg flex gap-1 bg-slate-100 rounded-full p-1">
+            {Object.entries(THEMES).map(([k, t]) => (
+              <button key={k} className={theme === k ? 'on' : ''} onClick={() => pickTheme(k)}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+        {updated && <span className="text-xs text-slate-400">Updated {updated}</span>}
+        <button onClick={load} className="text-sm font-medium px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors">
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
+      </header>
+
+      {error && <div className="dcard p-4 text-sm text-red-600">{error}</div>}
+
+      {/* RANGE */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-hand text-3xl font-bold leading-none">Business at a glance</h3>
+          <p className="text-xs text-slate-500 mt-1">{D ? `${D.period.title} | ${D.period.sub}` : ''}</p>
+        </div>
+        <div className="dseg flex gap-1 bg-white rounded-full p-1 shadow-md max-w-full overflow-x-auto">
+          {RANGES.map(([k, l]) => (
+            <button key={k} className={range === k ? 'on' : ''} onClick={() => setRange(k)}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {!D ? (
+        <div className="dcard p-10 text-center text-sm text-slate-400">{loading ? 'Loading dashboard...' : 'No data'}</div>
+      ) : (
+        <div className="dash-body space-y-6">
+          <Kpis D={D} M={T.metric} />
+
+          <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <MainChart D={D} T={T} metric={metric} setMetric={setMetric} style={style} setStyle={pickStyle} />
+            <PaymentsCard D={D} T={T} />
+          </section>
+
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <TopItems D={D} />
+            <LowStock D={D} />
+            <Attention D={D} rmDue={rmDue} openRm={() => setRmOpen(true)} />
+          </section>
+
+          <Heat D={D} T={T} />
+
+          <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <Categories D={D} wide={D.branches.length <= 1} />
+            {D.branches.length > 1 && <BranchCard D={D} T={T} />}
+          </section>
+
+          <Receipts D={D} onView={setViewing} />
+
+          <Reminders open={rmOpen} onOpen={() => setRmOpen(true)} onClose={() => setRmOpen(false)} onDue={onDue} />
+        </div>
+      )}
+
+      <ViewItemsModal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing?.billId}
+        subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
+        items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
+        total={viewing?.subtotal}
+        payment={viewing && viewing.status === 'paid' ? {
+          method: viewing.paymentMethod, cashAmount: viewing.cashAmount, tillAmount: viewing.tillAmount,
+          changeGiven: viewing.changeGiven, mpesaReceiptNumber: viewing.mpesaReceiptNumber, paidAt: viewing.paidAt,
+        } : null}
+      />
+    </div>
+  );
 }
 
-function StatCard({ icon: Icon, iconBg, label, value, sub, subColor }) {
-    return (
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
-            <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
-                <h3 className="text-2xl font-bold text-gray-900 mt-1 truncate">{value}</h3>
-                {sub && <p className={`text-xs mt-1 font-medium ${subColor || 'text-gray-500'}`}>{sub}</p>}
-            </div>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 ${iconBg}`}>
-                <Icon size={20} />
-            </div>
-        </div>
-    );
+/* ================= KPIs ================= */
+function Spark({ vals, color }) {
+  const v = vals.filter((x) => x != null);
+  if (v.length < 2) return null;
+  const w = 120, h = 36, mx = Math.max(...v), mn = Math.min(...v);
+  const pts = v.map((x, i) => `${(i / (v.length - 1)) * w},${h - ((x - mn) / (mx - mn || 1)) * (h - 4) - 2}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-28 h-9 shrink-0">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
-function MetricCard({ icon: Icon, label, value }) {
-    return (
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-                <p className="text-xs uppercase tracking-wider font-bold text-gray-400">{label}</p>
-                <Icon size={18} className="text-gray-400" />
+function KCard({ label, value, color, delta, vals, foot }) {
+  return (
+    <div className="dcard p-5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
+        {delta != null && (
+          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${delta >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+            {delta >= 0 ? '+' : '-'}{Math.abs(delta).toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <div className="flex items-end justify-between gap-2 mt-3">
+        <p className="text-2xl font-semibold">{value}</p>
+        {vals && <Spark vals={vals} color={color} />}
+      </div>
+      <p className="text-[11px] text-slate-400 mt-2">{foot}</p>
+    </div>
+  );
+}
+
+function Kpis({ D, M }) {
+  const vs = D.period.cmp ? `vs ${D.period.cmp}` : 'All recorded sales', dl = D.deltas, t = D.totals, s = D.series.cur;
+  return (
+    <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+      <KCard label="Total revenue" value={money(t.revenue)} color={M.sales} delta={dl.revenue} vals={s.revenue} foot={vs} />
+      <KCard label="Customers served" value={num(t.customers)} color={M.customers} delta={dl.customers} vals={s.customers} foot={`One per paid receipt | ${vs}`} />
+      <KCard label="Net profit (est.)" value={money(t.profit)} color={M.profit} delta={dl.profit} vals={s.profit} foot={`${t.marginPct.toFixed(1)}% margin`} />
+      <KCard label="Average basket" value={money(t.avgBasket)} color={M.sales} foot="Revenue per customer" />
+      <KCard label="Refunds and voids" value={money(D.voided.amount)} color="#ef4444" foot={`${D.voided.count} voided today, ${D.pendingVoids} pending`} />
+      <KCard label="Low stock" value={`${D.lowStock.count} products`} color="#f59e0b" foot="At or below reorder level" />
+    </section>
+  );
+}
+
+/* ================= main chart ================= */
+function MainChart({ D, T, metric, setMetric, style, setStyle }) {
+  const P = D.period, MT = METRICS[metric], color = T.metric[metric];
+  const cur = D.series.cur[MT.series], prev = D.series.prev ? D.series.prev[MT.series] : null;
+  const fmt = (v) => (MT.money ? money(v) : num(v) + ' customers');
+  const max = Math.max(0, ...cur.filter((v) => v != null));
+
+  const rows = useMemo(
+    () => P.labels.map((l, i) => ({ l, cur: cur[i], prev: prev ? prev[i] : null })),
+    [P, cur, prev]
+  );
+
+  const sub = P.sub
+    + (style === 'line' && prev ? ' | dashed line = ' + P.cmp : '')
+    + (metric === 'profit' ? ' | estimated from item costs' : '')
+    + (style === 'bar' && max ? ` | peak at ${P.labels[cur.indexOf(max)]}` : '');
+
+  const axis = { tick: { fontSize: 11, fill: '#94A3B8' }, axisLine: false, tickLine: false };
+  const tip = (
+    <Tooltip
+      contentStyle={{ background: T.ink, border: 'none', borderRadius: 10, color: '#fff', fontSize: 12 }}
+      itemStyle={{ color: '#fff' }} labelStyle={{ color: '#CBD5E1' }}
+      formatter={(v, name) => [fmt(v), name === 'prev' ? 'Previous' : MT.name]}
+    />
+  );
+
+  return (
+    <div className="dcard p-6 xl:col-span-2">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+        <div>
+          <h4 className="font-semibold text-lg">{MT.name} | {P.title}</h4>
+          <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
+        </div>
+        <div className="dseg flex gap-1 bg-slate-100 rounded-full p-1">
+          <button className={style === 'line' ? 'on' : ''} onClick={() => setStyle('line')}>Line</button>
+          <button className={style === 'bar' ? 'on' : ''} onClick={() => setStyle('bar')}>Bars</button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-4 mb-4">
+        {Object.entries(METRICS).map(([k, m]) => (
+          <button key={k} className={`dchip ${metric === k ? 'on' : ''}`} onClick={() => setMetric(k)}>{m.name.replace(' (est.)', '')}</button>
+        ))}
+      </div>
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          {style === 'bar' ? (
+            <BarChart data={rows}>
+              <CartesianGrid vertical={false} stroke="#F1F5F9" />
+              <XAxis dataKey="l" {...axis} interval="preserveStartEnd" minTickGap={14} />
+              <YAxis {...axis} tickFormatter={short} />
+              {tip}
+              <Bar dataKey="cur" radius={[4, 4, 0, 0]} maxBarSize={30}>
+                {rows.map((r, i) => <Cell key={i} fill={max > 0 && r.cur === max ? T.ink : color} />)}
+              </Bar>
+            </BarChart>
+          ) : (
+            <AreaChart data={rows}>
+              <defs>
+                <linearGradient id="mainGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.33} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="#F1F5F9" />
+              <XAxis dataKey="l" {...axis} interval="preserveStartEnd" minTickGap={14} />
+              <YAxis {...axis} tickFormatter={short} />
+              {tip}
+              {prev && <Area dataKey="prev" type="monotone" stroke="#CBD5E1" strokeWidth={2} strokeDasharray="6 6" fill="none" dot={false} activeDot={false} />}
+              <Area dataKey="cur" type="monotone" stroke={color} strokeWidth={3} fill="url(#mainGrad)"
+                dot={P.labels.length > 20 ? false : { r: 3, fill: '#fff', stroke: color, strokeWidth: 2 }} />
+            </AreaChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/* ================= payments ================= */
+function PaymentsCard({ D, T }) {
+  const tot = sum(D.payments.map((p) => p.amount)) || 1;
+  const rows = D.payments.map((p) => ({
+    value: p.amount,
+    label: `${PAY[p.method] || p.method}  ${((p.amount / tot) * 100).toFixed(0)}%`,
+  }));
+  return (
+    <div className="dcard p-6">
+      <h4 className="font-semibold text-lg mb-4">Payment methods</h4>
+      {rows.length === 0 ? (
+        <p className="text-xs text-slate-400">No payments recorded in this period.</p>
+      ) : (
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} layout="vertical" margin={{ left: 0, right: 8 }}>
+              <XAxis type="number" hide />
+              <YAxis type="category" dataKey="label" width={130} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+              <Tooltip cursor={{ fill: '#F8FAFC' }} formatter={(v) => money(v)} labelFormatter={() => ''} />
+              <Bar dataKey="value" radius={10} barSize={24}>
+                {rows.map((_, i) => <Cell key={i} fill={T.palette[i % T.palette.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================= lists ================= */
+function TopItems({ D }) {
+  const tmax = Math.max(...D.topItems.map((i) => i.revenue), 1);
+  return (
+    <div className="dcard p-6">
+      <h4 className="font-semibold text-lg mb-4">Top selling products</h4>
+      <div className="space-y-4">
+        {D.topItems.length === 0 && <p className="text-xs text-slate-400">No sales in this period.</p>}
+        {D.topItems.map((i, k) => (
+          <div key={k}>
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="truncate">{i.productName}</span>
+              <b className="shrink-0">{num(i.unitsSold)} sold</b>
             </div>
-            <h3 className="text-2xl font-black mt-1 text-gray-800">{value}</h3>
-        </div>
-    );
+            <div className="h-2 bg-slate-100 rounded-full mt-1.5">
+              <div className="h-2 rounded-full" style={{ width: `${(i.revenue / tmax) * 100}%`, background: 'linear-gradient(90deg,var(--accent-lite),var(--accent))' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function StatusPill({ status }) {
-    const styles = {
-        unpaid: 'bg-amber-50 text-amber-700 border-amber-200',
-        paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        voided: 'bg-red-50 text-red-600 border-red-200',
-    };
-    return (
-        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border ${styles[status] || styles.unpaid}`}>
-            {status}
-        </span>
-    );
+function LowStock({ D }) {
+  const sev = (it) => (it.stock === 0 || (it.level && it.stock / it.level <= 0.25) ? '#ef4444' : it.level && it.stock / it.level <= 0.5 ? '#f97316' : '#f59e0b');
+  const shown = D.lowStock.items.slice(0, 5);
+  return (
+    <div className="dcard p-6">
+      <h4 className="font-semibold text-lg mb-4">Low stock alerts</h4>
+      <div className="space-y-3">
+        {shown.length === 0 && <p className="text-xs text-slate-400">Nothing is below its reorder level.</p>}
+        {shown.map((it, k) => (
+          <div key={k} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50">
+            <span className="w-2 h-8 rounded-full shrink-0" style={{ background: sev(it) }} />
+            <div className="flex-1 min-w-0 text-sm font-medium">
+              <p className="truncate">{it.name}</p>
+              <p className="text-xs text-slate-400 font-normal">Reorder level: {it.level}</p>
+            </div>
+            <b className="text-sm shrink-0" style={{ color: sev(it) }}>
+              {it.stock === 0 ? 'Out of stock' : `${it.stock}${it.unit ? ' ' + it.unit : ''} left`}
+            </b>
+          </div>
+        ))}
+        {D.lowStock.count > shown.length && (
+          <p className="text-xs text-slate-400 text-center pt-1">{D.lowStock.count - shown.length} more in Products &amp; Stock</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function EmptyChartState({ label }) {
-    return (
-        <div className="h-full w-full flex items-center justify-center text-center text-xs text-gray-400 font-medium px-6">
-            {label}
+function Attention({ D, rmDue, openRm }) {
+  const Row = ({ l, v, warn }) => (
+    <div className="flex items-center justify-between py-3">
+      <span className="text-slate-600">{l}</span>
+      <span className={`font-semibold ${warn ? 'text-accent' : ''}`}>{v}</span>
+    </div>
+  );
+  return (
+    <div className="dcard p-6">
+      <h4 className="font-semibold text-lg">Needs attention</h4>
+      <p className="text-xs text-slate-500 mt-0.5 mb-3">Items waiting on a decision</p>
+      <div className="divide-y divide-slate-100 text-sm">
+        <button type="button" onClick={openRm} className="w-full flex items-center justify-between py-3 text-left">
+          <span className="text-slate-600">Reminders due</span>
+          <span className={`font-semibold ${rmDue ? 'text-accent' : ''}`}>{rmDue}</span>
+        </button>
+        <Row l="Payments awaiting confirmation" v={D.pendingPayments} warn={D.pendingPayments > 0} />
+        <Row l="Void requests pending" v={D.pendingVoids} warn={D.pendingVoids > 0} />
+        <Row l={`Idle stock, 30+ days (${D.dead.items.length})`} v={money(D.dead.totalValueTiedUp)} />
+        <Row l="Estimated next payroll" v={money(D.nextPayroll)} />
+      </div>
+    </div>
+  );
+}
+
+/* ================= business hours ================= */
+function Heat({ D, T }) {
+  const { openHour: open, closeHour: close } = D.store;
+  const H = D.heat, max = Math.max(1, ...H.flat()), hrs = close - open + 1;
+  let best = null;
+  H.forEach((row, di) => row.forEach((v, hi) => { if (v > 0 && (!best || v > best.v)) best = { v, di, hi }; }));
+  return (
+    <section className="dcard p-6">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+        <div>
+          <h4 className="font-semibold text-lg">Business hours</h4>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {best ? `Busiest: ${DAYS[best.di]} at ${hr(open + best.hi)} (${best.v} customers)` : 'No sales recorded in this period'}
+          </p>
         </div>
-    );
-                                        }
+        <span className="text-xs font-medium px-3 py-1 rounded-full bg-accent-soft text-accent">{D.period.title}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[620px] grid gap-1.5" style={{ gridTemplateColumns: `40px repeat(${hrs},1fr)` }}>
+          <span />
+          {Array.from({ length: hrs }, (_, i) => (
+            <span key={i} className="text-[10px] text-slate-400 text-center">{hr(open + i)}</span>
+          ))}
+          {H.map((row, di) => (
+            <Fragment key={di}>
+              <span className="text-xs text-slate-500 self-center">{DAYS[di]}</span>
+              {row.map((v, hi) => (
+                <div key={hi} title={`${DAYS[di]} ${hr(open + hi)}: ${v} customers`} className="h-7 rounded-lg"
+                  style={{ background: v ? `rgba(${T.rgb},${(0.12 + (0.88 * v) / max).toFixed(2)})` : '#F1F5F9' }} />
+              ))}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ================= categories / branches ================= */
+function Categories({ D, wide }) {
+  return (
+    <div className={`dcard p-6 ${wide ? 'xl:col-span-3' : 'xl:col-span-2'}`}>
+      <h4 className="font-semibold text-lg">Margin by category</h4>
+      <p className="text-xs text-slate-500 mt-0.5 mb-4">Revenue, profit and margin for the period</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left text-[11px] uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="pb-2 font-medium">Category</th>
+              <th className="pb-2 font-medium text-right">Revenue</th>
+              <th className="pb-2 font-medium text-right">Profit</th>
+              <th className="pb-2 font-medium text-right">Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {D.categories.length === 0 && (
+              <tr><td colSpan={4} className="py-6 text-center text-xs text-slate-400">No category sales in this period.</td></tr>
+            )}
+            {D.categories.map((c, i) => (
+              <tr key={i} className="border-t border-slate-100">
+                <td className="py-3 font-medium">{c.category}</td>
+                <td className="py-3 text-right">{money(c.revenue)}</td>
+                <td className={`py-3 text-right ${c.profit < 0 ? 'text-red-600' : ''}`}>{money(c.profit)}</td>
+                <td className={`py-3 text-right font-medium ${c.marginPct < 0 ? 'text-red-600' : c.marginPct < 15 ? 'text-amber-600' : ''}`}>
+                  {(+c.marginPct).toFixed(1)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function BranchCard({ D, T }) {
+  return (
+    <div className="dcard p-6">
+      <h4 className="font-semibold text-lg">Branch performance</h4>
+      <p className="text-xs text-slate-500 mt-0.5 mb-4">Revenue and profit by branch</p>
+      <div className="h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={D.branches}>
+            <CartesianGrid vertical={false} stroke="#F1F5F9" />
+            <XAxis dataKey="branchName" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94A3B8' }} tickFormatter={short} />
+            <Tooltip formatter={(v) => money(v)} />
+            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+            <Bar dataKey="revenue" name="Revenue" fill="#CBD5E1" radius={[4, 4, 0, 0]} maxBarSize={36} />
+            <Bar dataKey="profit" name="Profit" fill={T.accent} radius={[4, 4, 0, 0]} maxBarSize={36} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/* ================= receipts ================= */
+function Receipts({ D, onView }) {
+  const pill = {
+    paid: 'bg-emerald-50 text-emerald-700', unpaid: 'bg-amber-50 text-amber-700',
+    partial: 'bg-amber-50 text-amber-700', voided: 'bg-red-50 text-red-600',
+  };
+  return (
+    <section className="dcard p-6">
+      <h4 className="font-semibold text-lg mb-4">Recent receipts</h4>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left text-[11px] uppercase tracking-wider text-slate-400">
+            <tr>
+              {['Bill', 'Cashier', 'Branch', 'Time', 'Status'].map((h) => <th key={h} className="pb-2 font-medium">{h}</th>)}
+              <th className="pb-2 font-medium text-right">Amount</th>
+              <th className="pb-2 font-medium text-right">View</th>
+            </tr>
+          </thead>
+          <tbody>
+            {D.recent.length === 0 && (
+              <tr><td colSpan={7} className="py-6 text-center text-xs text-slate-400">No receipts yet.</td></tr>
+            )}
+            {D.recent.map((r) => (
+              <tr key={r._id} className="border-t border-slate-100">
+                <td className="py-3 font-medium">{r.billId}</td>
+                <td>{r.cashierName || '-'}</td>
+                <td>{r.branch?.name || '-'}</td>
+                <td className="text-slate-500 text-xs">
+                  {formatDateTime(r.createdAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </td>
+                <td><span className={`text-[11px] font-medium px-2 py-0.5 rounded-md capitalize ${pill[r.status] || pill.unpaid}`}>{r.status}</span></td>
+                <td className="text-right font-medium">{money(r.subtotal)}</td>
+                <td className="text-right">
+                  <button onClick={() => onView(r)} className="inline-flex items-center gap-1 text-slate-400 hover:text-accent text-xs font-medium transition-colors" aria-label="View receipt">
+                    <Eye size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+            }
