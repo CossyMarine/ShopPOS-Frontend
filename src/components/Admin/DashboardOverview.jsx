@@ -17,7 +17,16 @@ import {
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
-const LIVE_EVENTS = ['receipt:paid', 'receipt:updated', 'receipt:manualPending', 'receipt:manualPaymentResolved', 'sale:created'];
+// Anything that changes a number on this screen. Refreshes are debounced, so a
+// burst of events (e.g. several product:updated from one sale) costs one load.
+const LIVE_EVENTS = [
+  // sales
+  'receipt:paid', 'receipt:updated', 'receipt:manualPending', 'receipt:manualPaymentResolved', 'sale:created',
+  // voids
+  'receipt:voided', 'voidRequest:created', 'voidRequest:approved', 'voidRequest:rejected',
+  // stock
+  'product:updated', 'stockAdjustment:approved',
+];
 
 const THEMES = {
   classic: {
@@ -230,7 +239,7 @@ export default function DashboardOverview({ branch } = {}) {
         title={viewing?.billId}
         subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
         items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
-        total={viewing?.subtotal}
+        total={viewing?.totalDue ?? viewing?.subtotal}
         payment={viewing && viewing.status === 'paid' ? {
           method: viewing.paymentMethod, cashAmount: viewing.cashAmount, tillAmount: viewing.tillAmount,
           changeGiven: viewing.changeGiven, mpesaReceiptNumber: viewing.mpesaReceiptNumber, paidAt: viewing.paidAt,
@@ -374,7 +383,8 @@ function PaymentsCard({ D, T }) {
   }));
   return (
     <div className="dcard p-6">
-      <h4 className="font-semibold text-lg mb-4">Payment methods</h4>
+      <h4 className="font-semibold text-lg">Payment methods</h4>
+      <p className="text-xs text-slate-500 mt-0.5 mb-4">Amounts paid by customers, VAT included</p>
       {rows.length === 0 ? (
         <p className="text-xs text-slate-400">No payments recorded in this period.</p>
       ) : (
@@ -600,7 +610,7 @@ function Receipts({ D, onView }) {
                   {formatDateTime(r.createdAt, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </td>
                 <td><span className={`text-[11px] font-medium px-2 py-0.5 rounded-md capitalize ${pill[r.status] || pill.unpaid}`}>{r.status}</span></td>
-                <td className="text-right font-medium">{money(r.subtotal)}</td>
+                <td className="text-right font-medium">{money(r.totalDue ?? r.subtotal)}</td>
                 <td className="text-right">
                   <button onClick={() => onView(r)} className="inline-flex items-center gap-1 text-slate-400 hover:text-accent text-xs font-medium transition-colors" aria-label="View receipt">
                     <Eye size={14} />
