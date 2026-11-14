@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
 import { io } from 'socket.io-client';
 import { toast } from 'react-toastify';
 import { Eye } from 'lucide-react';
@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import API from '../../api/axios';
 import { useAuth } from '../../hooks/useAuth';
+import { useBranch } from '../../context/BranchContext';
 import ViewItemsModal from './ViewItemsModal';
 import Reminders from './Reminders';
 import {
@@ -15,6 +16,8 @@ import {
 } from '../../utils/dashboardHelpers';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+
+const LIVE_EVENTS = ['receipt:paid', 'receipt:updated', 'receipt:manualPending', 'receipt:manualPaymentResolved', 'sale:created'];
 
 const THEMES = {
   classic: {
@@ -58,6 +61,7 @@ async function fetchDashboard(range, branch) {
 /* ================= page ================= */
 export default function DashboardOverview({ branch } = {}) {
   const { user, setUser } = useAuth();
+  const { branches } = useBranch();
   const saved = user?.dashboardPrefs || {};
 
   const [range, setRange] = useState('today');
@@ -103,16 +107,51 @@ export default function DashboardOverview({ branch } = {}) {
 
   useEffect(() => { load(); }, [load]);
 
-  // live refresh (debounced)
+  /* ---------- live refresh ----------
+     One socket for the life of this screen. `load` is read through a ref, so
+     changing the range (which changes `load`) never tears the connection down.
+     Plain io(SOCKET_URL) with no withCredentials — the socket doesn't use
+     cookies, and the server's CORS doesn't send Allow-Credentials. */
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const sockRef = useRef(null);
+  const roomsRef = useRef([]);
+
   useEffect(() => {
-    const sock = io(SOCKET_URL, { withCredentials: true });
-    if (branch) sock.emit('join_room', `branch:${branch}`);
+    const sock = io(SOCKET_URL);
+    sockRef.current = sock;
+
+    // The server forgets rooms when a socket drops, so re-join on every (re)connect
+    const joinAll = () => roomsRef.current.forEach((r) => sock.emit('join_room', r));
+    sock.on('connect', joinAll);
+
     let t;
-    const kick = () => { clearTimeout(t); t = setTimeout(load, 1500); };
-    ['receipt:paid', 'receipt:updated', 'receipt:manualPending', 'receipt:manualPaymentResolved', 'sale:created']
-      .forEach((e) => sock.on(e, kick));
-    return () => { clearTimeout(t); sock.disconnect(); };
-  }, [branch, load]);
+    const kick = () => { clearTimeout(t); t = setTimeout(() => loadRef.current(), 1500); };
+    LIVE_EVENTS.forEach((e) => sock.on(e, kick));
+
+    return () => {
+      clearTimeout(t);
+      sock.disconnect();
+      sockRef.current = null;
+    };
+  }, []);
+
+  // A selected branch listens to that branch only. "All branches" (Super Admin)
+  // listens to every branch room, so sales anywhere still refresh the dashboard.
+  const roomKey = branch
+    ? `branch:${branch}`
+    : branches.map((b) => `branch:${b._id}`).join(',');
+
+  useEffect(() => {
+    const next = roomKey ? roomKey.split(',') : [];
+    const prev = roomsRef.current;
+    const sock = sockRef.current;
+    if (sock?.connected) {
+      prev.filter((r) => !next.includes(r)).forEach((r) => sock.emit('leave_room', r));
+      next.filter((r) => !prev.includes(r)).forEach((r) => sock.emit('join_room', r));
+    }
+    roomsRef.current = next; // if not connected yet, the 'connect' handler joins these
+  }, [roomKey]);
 
   const onDue = useCallback((n) => setRmDue(n), []);
 
@@ -574,4 +613,4 @@ function Receipts({ D, onView }) {
       </div>
     </section>
   );
-            }
+      }
