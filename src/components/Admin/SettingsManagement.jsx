@@ -90,6 +90,7 @@ export default function SettingsManagement() {
         try {
             await API.patch('/settings', { ...form, openHour: open, closeHour: close });
             toast.success('Settings saved');
+            window.dispatchEvent(new Event('store-settings-updated'));
         } catch (err) {
             console.error('Failed to save settings', err);
             toast.error(err.response?.data?.message || 'Failed to save settings');
