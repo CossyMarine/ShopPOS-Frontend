@@ -48,17 +48,28 @@ html {
     width: 100%;
   }
 }
-/* ===== Admin dashboard (scoped to .dash) ===== */
-.dash, .dash[data-theme="classic"] {
+
+/* ===== Admin dashboard + sidebar themes =====
+   .dash   = the dashboard page (also paints the page background)
+   .dtheme = anything that only needs the colours (the sidebar)
+   Theme is set with data-theme="classic" | "brand" | "mono" */
+.dash, .dtheme,
+.dash[data-theme="classic"], .dtheme[data-theme="classic"] {
   --accent: #16a34a; --accent-hover: #15803d; --accent-soft: #F0FDF4; --accent-lite: #4ADE80;
   --ink: #0F172A;
   --page: radial-gradient(1200px 600px at 10% -10%, #DBEAFE 0%, transparent 60%), radial-gradient(900px 500px at 100% 0%, #DCFCE7 0%, transparent 55%), #EEF1F6;
 }
-.dash[data-theme="brand"] {
+.dash[data-theme="brand"], .dtheme[data-theme="brand"] {
   --accent: #FF5722; --accent-hover: #E64A19; --accent-soft: #FFF0EB; --accent-lite: #FF8A65;
   --ink: #0A0A0A; --page: #E9ECF0;
 }
+.dash[data-theme="mono"], .dtheme[data-theme="mono"] {
+  --accent: #0A0A0A; --accent-hover: #262626; --accent-soft: #F4F4F5; --accent-lite: #737373;
+  --ink: #0A0A0A; --page: #F4F4F5;
+}
+
 .dash { background: var(--page); font-variant-numeric: tabular-nums; }
+
 .dcard {
   background: #fff; border-radius: 20px;
   box-shadow: 0 1px 1px rgba(10,10,10,.04), 0 8px 16px -4px rgba(10,10,10,.08), 0 28px 48px -14px rgba(10,10,10,.18);
@@ -68,6 +79,8 @@ html {
 .dchip { padding: .3rem .8rem; border-radius: 999px; font-size: .72rem; font-weight: 500; color: #64748B; border: 1px solid #E2E8F0; }
 .dchip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .dash.busy .dash-body { opacity: .55; transition: opacity .2s; }
+
+/* reminders button pulse */
 @keyframes rmPulse {
   0%   { box-shadow: 0 8px 16px -4px rgba(10,10,10,.12), 0 0 0 0 var(--rm-a); }
   70%  { box-shadow: 0 8px 16px -4px rgba(10,10,10,.12), 0 0 0 14px transparent; }
