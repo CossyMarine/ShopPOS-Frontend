@@ -33,7 +33,7 @@ export function BranchProvider({ children }) {
             .then((res) => setBranches(res.data))
             .catch(() => {})
             .finally(() => setLoading(false));
-    }, [user]);
+    }, [user?.id, user?.isAdmin, user?.selectedBranch, user?.branch]);
 
     // Switching branches updates the UI immediately, and — for admins —
     // persists the choice to the DB so it "sticks" until they switch again.
