@@ -6,6 +6,7 @@ import { Barcode, Trash2, Plus, Minus, X, Lock, ShieldAlert, History, UserCircle
 import API from '../api/axios';
 import { useAuth } from '../hooks/useAuth';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import useStoreInfo from '../hooks/useStoreInfo';
 import PaymentModal from '../components/Cashier/PaymentModal';
 import OfflineCashPaymentModal from '../components/Cashier/OfflineCashPaymentModal';
 import OfflineBanner from '../components/Cashier/OfflineBanner';
@@ -27,8 +28,11 @@ function initialsOf(name = '') {
 // Mirrors backend utils/vat.js buildOrderVat — used here only to show the
 // cashier a live estimate before checkout. The server recomputes the real
 // figures independently, so this never needs to be perfectly authoritative.
+//
+// Every line is calculated from unitPrice x quantity rather than a stored
+// lineTotal, so the total can never drift out of sync with the quantities.
 function estimateCartVat(cart, vatSettings) {
-    const rungUpTotal = cart.reduce((sum, i) => sum + i.lineTotal, 0);
+    const rungUpTotal = cart.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
 
     if (!vatSettings?.enabled) {
         return { vatEnabled: false, vatAmount: 0, netSubtotal: rungUpTotal, totalDue: rungUpTotal };
@@ -39,7 +43,7 @@ function estimateCartVat(cart, vatSettings) {
     let netSubtotal = 0;
 
     for (const item of cart) {
-        const lineTotal = item.lineTotal;
+        const lineTotal = item.unitPrice * item.quantity;
         if (item.vatClass === 'zero' || item.vatClass === 'exempt') {
             netSubtotal += lineTotal;
             continue;
@@ -65,6 +69,7 @@ export default function CashierPage() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
     const { isOnline } = useOnlineStatus();
+    const { storeName, currency } = useStoreInfo();
     const [shift, setShift] = useState(null);
     const [shiftLoading, setShiftLoading] = useState(true);
     const [showOpenShift, setShowOpenShift] = useState(false);
@@ -146,8 +151,16 @@ export default function CashierPage() {
         const socket = io(SOCKET_URL);
         socketRef.current = socket;
         socket.emit('join_room', `branch:${user.branch}`);
-        return () => socket.disconnect();
-    }, [user.branch]);
+
+        // Another register sold something, or stock changed elsewhere:
+        // refresh the counts so this screen never offers units that are gone.
+        let t;
+        const kick = () => { clearTimeout(t); t = setTimeout(fetchProducts, 1000); };
+        ['sale:created', 'sale:cancelled', 'receipt:voided', 'product:updated', 'stockAdjustment:approved', 'stockTransfer:completed']
+            .forEach((e) => socket.on(e, kick));
+
+        return () => { clearTimeout(t); socket.disconnect(); };
+    }, [user.branch, fetchProducts]);
 
     useEffect(() => {
         socketRef.current?.emit('cart:scan', { branchId: user.branch, registerId: REGISTER_ID, cart });
@@ -190,7 +203,24 @@ export default function CashierPage() {
     }, [isOnline]);
 
     // ---- Cart operations ----
+    // Live stock for a product from the loaded catalog (undefined if not found)
+    const stockOf = (productId) => products.find((p) => p._id === productId)?.currentStock;
+
+    // While online, the cart can never hold more than is on the shelf. Offline
+    // sales are deliberately not capped: they already happened in the real
+    // world and the server reconciles them when they sync.
     const addToCart = (product, qty = 1) => {
+        const stock = product.currentStock ?? 0;
+        const have = cart.find((i) => i.productId === product._id)?.quantity || 0;
+        if (isOnline && have + qty > stock) {
+            toast.warning(
+                stock <= 0
+                    ? `${product.name} is out of stock`
+                    : `Only ${stock} ${product.name} in stock${have ? ` (${have} already in cart)` : ''}`
+            );
+            return;
+        }
+
         // Price at the moment of adding, factoring in any active promotion —
         // this is a live preview, but the server recomputes it independently
         // at checkout regardless, so this is purely for the cashier's screen.
@@ -198,7 +228,9 @@ export default function CashierPage() {
         setCart((prev) => {
             const existing = prev.find((i) => i.productId === product._id);
             if (existing) {
-                return prev.map((i) => (i.productId === product._id ? { ...i, quantity: i.quantity + qty } : i));
+                return prev.map((i) => (i.productId === product._id
+                    ? { ...i, quantity: i.quantity + qty, lineTotal: i.unitPrice * (i.quantity + qty) }
+                    : i));
             }
             return [...prev, {
                 productId: product._id,
@@ -215,6 +247,13 @@ export default function CashierPage() {
     };
 
     const updateQty = (productId, delta) => {
+        const item = cart.find((i) => i.productId === productId);
+        if (!item) return;
+        const stock = stockOf(productId);
+        if (isOnline && delta > 0 && stock != null && item.quantity + delta > stock) {
+            toast.warning(`Only ${stock} ${item.productName} in stock`);
+            return;
+        }
         setCart((prev) => prev
             .map((i) => (i.productId === productId ? { ...i, quantity: i.quantity + delta, lineTotal: i.unitPrice * (i.quantity + delta) } : i))
             .filter((i) => i.quantity > 0));
@@ -277,10 +316,17 @@ export default function CashierPage() {
             return;
         }
 
+        // Last-chance check: stock may have dropped (another register) since
+        // these items were added.
+        const over = cart.find((i) => { const s = stockOf(i.productId); return s != null && i.quantity > s; });
+        if (over) {
+            return toast.error(`Only ${stockOf(over.productId)} ${over.productName} left. Please reduce the quantity.`);
+        }
+
         setCheckingOut(true);
         try {
-            const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass }) => ({
-                productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass,
+            const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, vatClass }) => ({
+                productId, productName, imageUrl, quantity, unitPrice, lineTotal: unitPrice * quantity, vatClass,
             }));
             const clientSaleId = crypto.randomUUID();
             // subtotal sent here is just a display hint — the server always
@@ -296,6 +342,7 @@ export default function CashierPage() {
                 setShowOfflinePayment(true);
             } else {
                 toast.error(err.response?.data?.message || 'Failed to start checkout');
+                fetchProducts(); // the failure is often stale stock — show the real counts
             }
         }
         setCheckingOut(false);
@@ -337,13 +384,15 @@ export default function CashierPage() {
         setShowPayment(false);
         setReceipt(null);
         if (!r) return;
+        setCheckingOut(true); // hold the Purchase button until the restocked counts are back
         try {
             await API.post(`/receipts/${r._id}/cancel`);
             if (!silent) toast.info('Checkout cancelled — stock released');
-            fetchProducts();
         } catch (err) {
             if (!silent) toast.error(err.response?.data?.message || 'Failed to cancel checkout');
         }
+        await fetchProducts();
+        setCheckingOut(false);
     }, [fetchProducts]);
 
     // Keep the ref in sync so the beforeunload handler below (bound once)
@@ -412,10 +461,10 @@ export default function CashierPage() {
             <header className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2.5 flex items-center justify-between shrink-0 shadow-sm gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-9 h-9 rounded-lg bg-brand-orange flex items-center justify-center font-extrabold text-lg text-white shadow-md shrink-0">
-                        B
+                        {(storeName || 'P').charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                        <h1 className="font-extrabold text-sm sm:text-base leading-none text-gray-900 truncate">Babylon POS</h1>
+                        <h1 className="font-extrabold text-sm sm:text-base leading-none text-gray-900 truncate">{storeName || 'Point of Sale'}</h1>
                         <span className="text-[11px] font-semibold text-brand-orange">
                             {formatKenyanDate(now, { weekday: 'short', day: '2-digit', month: 'short' })} · {formatKenyanTime(now)} EAT
                         </span>
@@ -508,9 +557,13 @@ export default function CashierPage() {
                             {visibleProducts.map((p) => {
                                 const stock = p.currentStock ?? 0;
                                 const qtyInCart = cart.find((i) => i.productId === p._id)?.quantity || 0;
+                                // Online: what's left after what's already in the cart.
+                                // Offline: cached stock only (offline sales aren't capped).
+                                const left = isOnline ? stock - qtyInCart : stock;
+                                const blocked = stock <= 0 || left <= 0;
                                 const promo = p.activePromotion;
                                 return (
-                                    <button key={p._id} onClick={() => stock > 0 && addToCart(p)} disabled={stock <= 0}
+                                    <button key={p._id} onClick={() => addToCart(p)} disabled={blocked}
                                         className="relative text-left p-2.5 bg-white rounded-xl border border-gray-200 hover:border-brand-orange hover:shadow-md transition flex flex-col disabled:opacity-40">
                                         {qtyInCart > 0 && (
                                             <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-brand-orange text-white text-[11px] font-black flex items-center justify-center shadow-md ring-2 ring-white z-10">
@@ -519,7 +572,7 @@ export default function CashierPage() {
                                         )}
                                         {promo && (
                                             <span className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full z-10">
-                                                {promo.type === 'percent_off' ? `-${promo.value}%` : `-${promo.value} KES`}
+                                                {promo.type === 'percent_off' ? `-${promo.value}%` : `-${promo.value} ${currency}`}
                                             </span>
                                         )}
                                         <div className="w-full h-28 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-1.5">
@@ -533,14 +586,14 @@ export default function CashierPage() {
                                         <div className="mt-1.5 flex justify-between items-center">
                                             {promo ? (
                                                 <span className="flex items-baseline gap-1">
-                                                    <span className="text-xs font-extrabold text-red-500">{promo.effectivePrice} KES</span>
+                                                    <span className="text-xs font-extrabold text-red-500">{promo.effectivePrice} {currency}</span>
                                                     <span className="text-[9px] text-gray-400 line-through">{p.sellingPrice}</span>
                                                 </span>
                                             ) : (
-                                                <span className="text-xs font-extrabold text-brand-orange">{p.sellingPrice} KES</span>
+                                                <span className="text-xs font-extrabold text-brand-orange">{p.sellingPrice} {currency}</span>
                                             )}
-                                            <span className={`text-[9px] font-bold px-1 rounded ${stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                                {stock > 0 ? stock : 'Out'}
+                                            <span className={`text-[9px] font-bold px-1 rounded ${left > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                                {stock <= 0 ? 'Out' : left <= 0 ? 'Max' : left}
                                             </span>
                                         </div>
                                     </button>
@@ -571,7 +624,7 @@ export default function CashierPage() {
                                         <div className="flex-1 min-w-0 pr-2">
                                             <h4 className="text-xs font-bold text-gray-900 truncate">{item.productName}</h4>
                                             <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                                                {item.unitPrice} KES × {item.quantity}
+                                                {item.unitPrice} {currency} × {item.quantity}
                                                 {item.promotionName && (
                                                     <span className="text-[9px] bg-red-50 text-red-500 font-bold px-1 rounded">{item.promotionName}</span>
                                                 )}
@@ -594,18 +647,18 @@ export default function CashierPage() {
                                             <>
                                                 <div className="flex justify-between items-center text-xs text-gray-500 font-semibold">
                                                     <span>Subtotal</span>
-                                                    <span>{netSubtotal.toLocaleString()} KES</span>
+                                                    <span>{netSubtotal.toLocaleString()} {currency}</span>
                                                 </div>
                                                 <div className="flex justify-between items-center text-xs text-gray-500 font-semibold">
                                                     <span>VAT ({vatSettings.rate}%)</span>
-                                                    <span>{vatAmount.toLocaleString()} KES</span>
+                                                    <span>{vatAmount.toLocaleString()} {currency}</span>
                                                 </div>
                                                 <div className="border-t border-dashed border-gray-200" />
                                             </>
                                         )}
                                         <div className="flex justify-between items-center">
                                             <span className="text-sm font-extrabold text-gray-900">Total ({totalQty} items)</span>
-                                            <span className="text-xl font-black text-brand-orange">{totalDue.toLocaleString()} KES</span>
+                                            <span className="text-xl font-black text-brand-orange">{totalDue.toLocaleString()} {currency}</span>
                                         </div>
                                     </div>
                                     <button onClick={handleCheckout} disabled={checkingOut || cart.length === 0}
