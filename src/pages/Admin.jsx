@@ -10,6 +10,7 @@ import API from '../api/axios';
 import AdminSidebar, { ADMIN_NAV_ITEMS } from '../components/Admin/AdminSidebar';
 import BranchSelector from '../components/Admin/BranchSelector';
 import DashboardOverview from '../components/Admin/DashboardOverview';
+import Reminders from '../components/Admin/Reminders';
 import ProductManagement from '../components/Storekeeper/ProductManagement';
 import OrdersLedger from '../components/Admin/OrdersLedger';
 import PaymentsView from '../components/Admin/PaymentsView';
@@ -49,6 +50,11 @@ function AdminInner() {
     const [activeView, setActiveView] = useState('dashboard');
     const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Reminders live here (not inside the dashboard) so their due-checks,
+    // toasts and browser notifications keep running on every tab.
+    const [rmOpen, setRmOpen] = useState(false);
+    const [rmDue, setRmDue] = useState(0);
 
     // Refs so the socket listener always sees the latest values without reconnecting
     const activeViewRef = useRef(activeView);
@@ -97,6 +103,10 @@ function AdminInner() {
 
     const ActiveComponent = VIEWS[activeView] || DashboardOverview;
 
+    // Same theme the sidebar uses, so the reminders button and panel pick up
+    // the user's accent colour outside the dashboard too.
+    const theme = user?.dashboardPrefs?.theme || 'classic';
+
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800 flex">
             <AdminSidebar
@@ -129,8 +139,23 @@ function AdminInner() {
                 </div>
 
                 <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-                    <ActiveComponent onPendingChange={fetchPendingCount} branch={selectedBranch} />
+                    <ActiveComponent
+                        onPendingChange={fetchPendingCount}
+                        branch={selectedBranch}
+                        rmDue={rmDue}
+                        onOpenReminders={() => setRmOpen(true)}
+                    />
                 </main>
+            </div>
+
+            {/* `contents` keeps this wrapper out of the flex layout; it only supplies the theme colours */}
+            <div className="dtheme contents" data-theme={theme}>
+                <Reminders
+                    open={rmOpen}
+                    onOpen={() => setRmOpen(true)}
+                    onClose={() => setRmOpen(false)}
+                    onDue={setRmDue}
+                />
             </div>
         </div>
     );
@@ -142,4 +167,4 @@ export default function Admin() {
             <AdminInner />
         </BranchProvider>
     );
-                    }
+}
