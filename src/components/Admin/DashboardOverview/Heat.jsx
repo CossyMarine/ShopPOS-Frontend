@@ -4,16 +4,22 @@ import { DAYS, hr } from '../../../utils/dashboardHelpers';
 export default function Heat({ D, T }) {
   const { openHour: open, closeHour: close } = D.store;
   const H = D.heat, max = Math.max(1, ...H.flat()), hrs = close - open + 1;
+  const outside = D.heatOutside || 0;
   let best = null;
   H.forEach((row, di) => row.forEach((v, hi) => { if (v > 0 && (!best || v > best.v)) best = { v, di, hi }; }));
+
+  const headline = best
+    ? `Busiest: ${DAYS[best.di]} at ${hr(open + best.hi)} (${best.v} customers)`
+    : outside > 0
+      ? 'No sales during opening hours'
+      : 'No sales recorded in this period';
+
   return (
     <section className="dcard p-6">
       <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
         <div>
           <h4 className="font-semibold text-lg">Business hours</h4>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {best ? `Busiest: ${DAYS[best.di]} at ${hr(open + best.hi)} (${best.v} customers)` : 'No sales recorded in this period'}
-          </p>
+          <p className="text-xs text-slate-500 mt-0.5">{headline}</p>
         </div>
         <span className="text-xs font-medium px-3 py-1 rounded-full bg-accent-soft text-accent">{D.period.title}</span>
       </div>
@@ -34,6 +40,11 @@ export default function Heat({ D, T }) {
           ))}
         </div>
       </div>
+      {outside > 0 && (
+        <p className="text-xs text-slate-400 mt-3">
+          {outside} {outside === 1 ? 'customer' : 'customers'} outside opening hours ({hr(open)} to {hr(close)}), not shown above.
+        </p>
+      )}
     </section>
   );
 }
