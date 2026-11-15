@@ -47,10 +47,11 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
   const pickTheme = (t) => { if (t === theme) return; setThemeState(t); savePref({ theme: t }); };
   const pickStyle = (s) => { if (s === style) return; setStyleState(s); savePref({ chartStyle: s }); };
 
-  const load = useCallback(async () => {
+  // force = true (the Refresh button) skips the server's 30s cache on the long ranges
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     try {
-      const d = await fetchDashboard(range, branch);
+      const d = await fetchDashboard(range, branch, force === true);
       setStoreConfig(d.store);             // currency + timezone from Settings
       setD(d);
       setError('');
@@ -64,7 +65,9 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
 
   useEffect(() => { load(); }, [load]);
 
-  useLiveRefresh(load, branch, branches);
+  // This Year / All are heavy queries, so live events wait longer before reloading them
+  const liveDelay = range === 'year' || range === 'all' ? 10000 : 1500;
+  useLiveRefresh(load, branch, branches, liveDelay);
 
   return (
     <div className={`dash rounded-3xl p-4 lg:p-6 space-y-6 text-ink min-h-full pb-24 ${loading ? 'busy' : ''}`} data-theme={theme}>
@@ -85,7 +88,7 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
           </div>
         </div>
         {updated && <span className="text-xs text-slate-400">Updated {updated}</span>}
-        <button onClick={load} className="text-sm font-medium px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors">
+        <button onClick={() => load(true)} className="text-sm font-medium px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors">
           {loading ? 'Loading...' : 'Refresh'}
         </button>
       </header>
@@ -147,4 +150,4 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
       />
     </div>
   );
-          }
+}
