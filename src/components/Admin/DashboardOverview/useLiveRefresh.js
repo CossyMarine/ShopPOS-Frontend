@@ -4,16 +4,21 @@ import { SOCKET_URL, LIVE_EVENTS } from './constants';
 
 /* Live refresh for the dashboard.
 
-   One socket for the life of the screen. `load` is read through a ref, so
-   changing the range (which changes `load`) never tears the connection down.
+   One socket for the life of the screen. `load` and `delayMs` are read
+   through refs, so changing the range never tears the connection down.
    Plain io(SOCKET_URL) with no withCredentials — the socket doesn't use
    cookies, and the server's CORS doesn't send Allow-Credentials.
 
+   delayMs is the debounce before a burst of events triggers one reload.
+   The heavy ranges (This Year / All) pass a longer delay.
+
    A selected branch listens to that branch only. "All branches" (Super Admin)
    listens to every branch room, so sales anywhere still refresh the dashboard. */
-export default function useLiveRefresh(load, branch, branches) {
+export default function useLiveRefresh(load, branch, branches, delayMs = 1500) {
   const loadRef = useRef(load);
   loadRef.current = load;
+  const delayRef = useRef(delayMs);
+  delayRef.current = delayMs;
   const sockRef = useRef(null);
   const roomsRef = useRef([]);
 
@@ -26,7 +31,7 @@ export default function useLiveRefresh(load, branch, branches) {
     sock.on('connect', joinAll);
 
     let t;
-    const kick = () => { clearTimeout(t); t = setTimeout(() => loadRef.current(), 1500); };
+    const kick = () => { clearTimeout(t); t = setTimeout(() => loadRef.current(), delayRef.current); };
     LIVE_EVENTS.forEach((e) => sock.on(e, kick));
 
     return () => {
