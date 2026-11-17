@@ -93,7 +93,7 @@ export default function PWAPrompt() {
       {installEvent && (
         <div className="flex items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-sm text-white shadow-lg">
           <Download size={16} className="shrink-0 text-orange-400" />
-          <span className="flex-1">Install ShopPOS on this device.</span>
+          <span className="flex-1">Install CHEMALUK on this device.</span>
           <button
             onClick={install}
             className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-bold hover:bg-orange-600"
@@ -114,4 +114,4 @@ export default function PWAPrompt() {
       )}
     </div>
   );
-      }
+}
