@@ -4,6 +4,29 @@ import API from "../api/axios";
 
 const AuthContext = createContext(null);
 
+// Last user confirmed by the server. Only used as a fallback when /auth/me
+// fails with NO response (device offline), so an installed PWA can reload
+// the cashier screen without a connection. A real 401 clears it.
+const USER_CACHE_KEY = "shoppos-last-user";
+
+const readCachedUser = () => {
+  try {
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedUser = (user) => {
+  try {
+    if (user) localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_CACHE_KEY);
+  } catch {
+    /* storage may be unavailable — ignore */
+  }
+};
+
 // Single shared source of truth for "who's logged in", read from the httpOnly
 // cookie via GET /auth/me. Wrap the app once in <AuthProvider> so every
 // component (App's route guards, ProfilePage, LoginPage, etc.) reads the
@@ -19,8 +42,16 @@ export function AuthProvider({ children }) {
     try {
       const res = await API.get("/auth/me");
       setUser(res.data.user);
-    } catch {
-      setUser(null);
+      writeCachedUser(res.data.user);
+    } catch (err) {
+      if (!err.response) {
+        // Offline / timeout: trust the last known user so the app still opens.
+        // The next real API call re-validates the session (401 → /login).
+        setUser(readCachedUser());
+      } else {
+        setUser(null);
+        writeCachedUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -43,8 +74,12 @@ export function AuthProvider({ children }) {
       }
       if (typeof caches !== "undefined") {
         try {
+          // Keep the service worker's precache (the offline app shell);
+          // only clear runtime caches such as images.
           const keys = await caches.keys();
-          await Promise.all(keys.map((key) => caches.delete(key)));
+          await Promise.all(
+            keys.filter((key) => !key.includes("precache")).map((key) => caches.delete(key))
+          );
         } catch {
           /* Cache Storage unsupported — ignore */
         }
