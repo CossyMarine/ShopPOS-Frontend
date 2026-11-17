@@ -3,6 +3,7 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { routeForUser } from "./utils/routeForUser";
+import PWAPrompt from "./components/PWAPrompt";
 import LoginPage from "./pages/LoginPage";
 import Admin from "./pages/Admin";
 import CashierPage from "./pages/CashierPage";
@@ -112,6 +113,7 @@ function AppRoutes() {
       </Routes>
 
       <ToastContainer position="top-right" theme="light" autoClose={3000} />
+      <PWAPrompt />
     </BrowserRouter>
   );
 }
