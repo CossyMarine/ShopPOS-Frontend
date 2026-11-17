@@ -4,6 +4,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { routeForUser } from "./utils/routeForUser";
 import PWAPrompt from "./components/PWAPrompt";
+import DesktopModeToggle from "./components/DesktopModeToggle";
 import LoginPage from "./pages/LoginPage";
 import Admin from "./pages/Admin";
 import CashierPage from "./pages/CashierPage";
@@ -114,6 +115,7 @@ function AppRoutes() {
 
       <ToastContainer position="top-right" theme="light" autoClose={3000} />
       <PWAPrompt />
+      <DesktopModeToggle floating />
     </BrowserRouter>
   );
 }
