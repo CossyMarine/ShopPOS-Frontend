@@ -12,15 +12,15 @@ export default defineConfig({
       includeAssets: ["apple-touch-icon.png"],
       manifest: {
         id: "/",
-        name: "ShopPOS",
-        short_name: "ShopPOS",
+        name: "CHEMALUK",
+        short_name: "CHEMALUK",
         description: "Point of sale for the supermarket — works offline.",
         start_url: "/login", // logged-in users are routed to their role page
         scope: "/",
         display: "standalone",
         orientation: "any",
         theme_color: "#FF5722",
-        background_color: "#000000",
+        background_color: "#FF5722",
         icons: [
           { src: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
           { src: "/pwa-512x512.png", sizes: "512x512", type: "image/png" },
