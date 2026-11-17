@@ -30,7 +30,9 @@ export default defineConfig({
         scope: "/",
 
         display: "standalone",
-        orientation: "any",
+
+        // Locked to portrait so the app doesn't rotate on phones.
+        orientation: "portrait",
 
         theme_color: "#FF5722",
         background_color: "#FF5722",
