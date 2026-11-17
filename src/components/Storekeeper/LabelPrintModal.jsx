@@ -60,7 +60,7 @@ function LabelCard({ product, storeName }) {
       <div className="flex justify-between w-full text-[11px] font-black border-t border-gray-200 pt-1 mt-1">
         <span className="text-gray-500">PRICE:</span>
         <span className="text-brand-orange">
-          {product.sellingPrice != null ? `${product.sellingPrice.toLocaleString()} KES` : '—'}
+          {product.sellingPrice != null ? `${Number(product.sellingPrice).toLocaleString()} KES` : '—'}
         </span>
       </div>
     </div>
@@ -77,6 +77,36 @@ export default function LabelPrintModal({ product, onClose }) {
   const [myBranchName, setMyBranchName] = useState('');
   const [loadingBranch, setLoadingBranch] = useState(true);
   const [copies, setCopies] = useState(1);
+
+  // Which barcode to print: the single item, or any pack that has its own
+  // barcode (Box, Carton, Sack...). A pack label shows the pack's price.
+  const unitAbbr = product.unit?.abbreviation || 'pc';
+  const options = [
+    {
+      label: `Single (${unitAbbr})`,
+      code: product.barcode,
+      name: product.name,
+      price: product.sellingPrice,
+    },
+    ...(product.packs || [])
+      .filter((k) => k.barcode)
+      .map((k) => ({
+        label: `${k.name} (${k.qty} ${unitAbbr})`,
+        code: k.barcode,
+        name: `${product.name} - ${k.name}`,
+        price: k.price > 0 ? k.price : (product.sellingPrice || 0) * k.qty,
+      })),
+  ].filter((o) => o.code);
+  const [optIdx, setOptIdx] = useState(0);
+  const opt = options[optIdx] || options[0];
+
+  // What the label actually shows for the chosen barcode
+  const labelProduct = {
+    ...product,
+    name: opt?.name ?? product.name,
+    barcode: opt?.code || '',
+    sellingPrice: opt?.price ?? product.sellingPrice,
+  };
 
   useEffect(() => {
     if (isAdmin) {
@@ -95,11 +125,11 @@ export default function LabelPrintModal({ product, onClose }) {
     : myBranchName || 'Your Branch';
 
   const copyCount = Math.min(Math.max(parseInt(copies, 10) || 1, 1), 100);
-  const handlePrint = () => product.barcode && window.print();
+  const handlePrint = () => labelProduct.barcode && window.print();
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="no-print bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200">
+      <div className="no-print bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center pb-3 border-b border-gray-100 mb-4">
           <h3 className="font-extrabold text-base text-gray-900 flex items-center gap-2">
             <Printer size={16} className="text-brand-orange" /> Print Barcode Label
@@ -130,12 +160,28 @@ export default function LabelPrintModal({ product, onClose }) {
             </div>
           )}
 
+          {/* Barcode picker: only shown when the product has pack barcodes */}
+          {options.length > 1 && (
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Barcode to print</label>
+              <select
+                value={optIdx}
+                onChange={(e) => setOptIdx(Number(e.target.value))}
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:bg-white focus:border-brand-orange"
+              >
+                {options.map((o, i) => (
+                  <option key={i} value={i}>{o.label} · {o.code}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {loadingBranch ? (
             <div className="w-64 mx-auto h-32 flex items-center justify-center text-xs text-gray-400">
               Loading label…
             </div>
           ) : (
-            <LabelCard product={product} storeName={storeName} />
+            <LabelCard product={labelProduct} storeName={storeName} />
           )}
 
           <div>
@@ -158,7 +204,7 @@ export default function LabelPrintModal({ product, onClose }) {
             </button>
             <button
               onClick={handlePrint}
-              disabled={!product.barcode || (isAdmin && !adminBranchId)}
+              disabled={!labelProduct.barcode || (isAdmin && !adminBranchId)}
               className="px-5 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-extrabold rounded-xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
             >
               <Printer size={14} />
@@ -169,10 +215,10 @@ export default function LabelPrintModal({ product, onClose }) {
       </div>
 
       <div className="print-only">
-        {product.barcode &&
+        {labelProduct.barcode &&
           Array.from({ length: copyCount }).map((_, i) => (
             <div className="print-page" key={i}>
-              <LabelCard product={product} storeName={storeName} />
+              <LabelCard product={labelProduct} storeName={storeName} />
             </div>
           ))}
       </div>
@@ -197,4 +243,4 @@ export default function LabelPrintModal({ product, onClose }) {
       `}</style>
     </div>
   );
-}
+            }
