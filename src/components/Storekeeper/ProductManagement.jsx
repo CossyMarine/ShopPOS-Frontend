@@ -1,500 +1,222 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Plus, Boxes, PackagePlus } from 'lucide-react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Plus, Boxes, PackagePlus, Package, History, Truck } from 'lucide-react';
 import { toast } from 'react-toastify';
-import imageCompression from 'browser-image-compression';
 import API from '../../api/axios';
 import ConfirmModal from '../Admin/ConfirmModal';
 import { useAuth } from '../../hooks/useAuth';
 import LabelPrintModal from './LabelPrintModal';
-
-import { EMPTY_FORM, EMPTY_STOCK, EMPTY_UNIT, avgCostPerEach } from './productManagementUtils';
+import { EMPTY_UNIT, packsOf, breakdown, money, num, statusOf } from './productManagementUtils';
+import { baseAbbr, stockOf } from '../../utils/receivingMath';
+import { avgCostPerEach } from './productManagementUtils';
 import ProductStats from './ProductStats';
 import LowStockBanner from './LowStockBanner';
 import UnitManager from './UnitManager';
 import ProductFilters from './ProductFilters';
 import ProductTable from './ProductTable';
 import ProductFormModal from './ProductFormModal';
-import ReceiveStockModal from './ReceiveStockModal';
+import ReceiveStock from './ReceiveStock';
+import ReceiptHistory, { ReceiptModal } from './ReceiptHistory';
+import SuppliersManager from './SuppliersManager';
 import StockAdjustmentModal from './StockAdjustmentModal';
+
+const TABS = [['products', 'Products', Package], ['receive', 'Receive stock', PackagePlus], ['packs', 'Packs & units', Boxes], ['history', 'History', History], ['suppliers', 'Suppliers', Truck]];
 
 export default function ProductManagement({ branch }) {
     const { user } = useAuth();
-    // Storekeeper/branchManager are locked to their own branch (user.branch).
-    // Super Admin uses whichever branch is selected in the dashboard header —
-    // passed down as the `branch` prop, and persisted in the DB so it's
-    // restored automatically on refresh/relogin instead of resetting.
     const effectiveBranch = branch || user.branch;
+    const canDelete = !!(user.isAdmin || user.role === 'branchManager');
+
+    const [tab, setTab] = useState('products');
     const [products, setProducts] = useState([]);
     const [units, setUnits] = useState([]);
-    const [form, setForm] = useState(EMPTY_FORM);
-    const [editingId, setEditingId] = useState(null);
-    const [showProductModal, setShowProductModal] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [uploading, setUploading] = useState(false);
-    const [pendingDelete, setPendingDelete] = useState(null);
-    const [deleting, setDeleting] = useState(false);
-    const [receivingFor, setReceivingFor] = useState(null);
-    const [stockForm, setStockForm] = useState(EMPTY_STOCK);
-    const [receiving, setReceiving] = useState(false);
-    const [showReceivePicker, setShowReceivePicker] = useState(false);
+    const [suppliers, setSuppliers] = useState([]);
+    const [receipts, setReceipts] = useState([]);
+    const [modal, setModal] = useState(null);            // { product, name }
+    const [pending, setPending] = useState(null);        // { type:'delete'|'archive', item }
+    const [busy, setBusy] = useState(false);
     const [labelFor, setLabelFor] = useState(null);
     const [adjustingFor, setAdjustingFor] = useState(null);
-
+    const [shownReceipt, setShownReceipt] = useState(null);
+    const [focusReq, setFocusReq] = useState(null);
     const [showUnitManager, setShowUnitManager] = useState(false);
     const [unitForm, setUnitForm] = useState(EMPTY_UNIT);
     const [savingUnit, setSavingUnit] = useState(false);
     const [deletingUnitId, setDeletingUnitId] = useState(null);
+    const [supplierFilter, setSupplierFilter] = useState('');
+    const [showLowStockBanner, setShowLowStockBanner] = useState(true);
 
     const [search, setSearch] = useState('');
     const [filterPackaging, setFilterPackaging] = useState('all');
     const [filterCategory, setFilterCategory] = useState('all');
-    const [showLowStockBanner, setShowLowStockBanner] = useState(true);
+    const [filterStatus, setFilterStatus] = useState('All');
 
-    const fileRef = useRef();
+    const params = effectiveBranch ? { branch: effectiveBranch } : {};
+    const fetchProducts = useCallback(async () => {
+        try { const r = await API.get('/products', { params: { ...params, status: 'all' } }); setProducts(r.data); }
+        catch { toast.error('Failed to load products'); }
+    }, [effectiveBranch]); // eslint-disable-line
+    const fetchUnits = async () => { try { setUnits((await API.get('/inventory/units')).data); } catch { /* ignore */ } };
+    const fetchSuppliers = useCallback(async () => { try { setSuppliers((await API.get('/suppliers', { params: { ...params, status: 'all' } })).data); } catch { /* ignore */ } }, [effectiveBranch]); // eslint-disable-line
+    const fetchReceipts = useCallback(async () => { try { setReceipts((await API.get('/goods-receipts', { params })).data); } catch { /* ignore */ } }, [effectiveBranch]); // eslint-disable-line
 
-    const fetchProducts = async () => {
-        try {
-            const res = await API.get('/products', { params: effectiveBranch ? { branch: effectiveBranch } : {} });
-            setProducts(res.data);
-        } catch (err) {
-            console.error('Failed to fetch products', err);
-            toast.error('Failed to load products');
-        }
-    };
+    useEffect(() => { fetchProducts(); fetchUnits(); fetchSuppliers(); }, [effectiveBranch]); // eslint-disable-line
+    useEffect(() => { if (tab === 'history') fetchReceipts(); }, [tab, effectiveBranch]); // eslint-disable-line
 
-    const fetchUnits = async () => {
-        try {
-            const res = await API.get('/inventory/units');
-            setUnits(res.data);
-        } catch (err) {
-            console.error('Failed to fetch units', err);
-        }
-    };
-
-    // Re-fetch whenever the admin switches branch in the header
-    useEffect(() => { fetchProducts(); fetchUnits(); }, [effectiveBranch]);
-
-    const selectedUnit = units.find((u) => u._id === form.unit);
-    const unitAbbr = selectedUnit?.abbreviation || 'unit';
-    const packSizeNum = parseInt(form.packSize, 10) || 1;
-    const isBulk = form.isBulk;
-
-    const categories = useMemo(
-        () => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(),
-        [products]
-    );
+    const active = useMemo(() => products.filter((p) => p.isActive !== false), [products]);
+    const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(), [products]);
 
     const stats = useMemo(() => {
         let bulkCount = 0, lowCount = 0, stockValue = 0, potentialProfit = 0;
-        products.forEach((p) => {
-            const stock = p.currentStock ?? 0;
-            const packSize = p.packSize || 1;
-            const cost = avgCostPerEach(p);
-            if (packSize > 1) bulkCount++;
-            const low = stock === 0 || (p.reorderLevel > 0 && stock <= p.reorderLevel);
-            if (low) lowCount++;
-            stockValue += stock * cost;
-            potentialProfit += stock * ((p.sellingPrice || 0) - cost);
+        active.forEach((p) => {
+            const s = stockOf(p), cost = avgCostPerEach(p);
+            if ((p.packs || []).length) bulkCount++;
+            if (s === 0 || (p.reorderLevel > 0 && s <= p.reorderLevel)) lowCount++;
+            stockValue += s * cost; potentialProfit += s * ((p.sellingPrice || 0) - cost);
         });
-        return { totalSkus: products.length, bulkCount, lowCount, stockValue, potentialProfit };
-    }, [products]);
+        return { totalSkus: active.length, bulkCount, lowCount, stockValue, potentialProfit };
+    }, [active]);
+    const lowStockItems = useMemo(() => active.filter((p) => stockOf(p) === 0 || (p.reorderLevel > 0 && stockOf(p) <= p.reorderLevel)), [active]);
 
-    const lowStockItems = useMemo(
-        () => products.filter((p) => {
-            const stock = p.currentStock ?? 0;
-            return stock === 0 || (p.reorderLevel > 0 && stock <= p.reorderLevel);
-        }),
-        [products]
-    );
-
-    const filteredProducts = useMemo(() => {
+    const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
         return products.filter((p) => {
-            const packSize = p.packSize || 1;
-            const matchesQuery = !q
-                || p.name.toLowerCase().includes(q)
-                || (p.barcode || '').toLowerCase().includes(q)
-                || (p.caseBarcode || '').toLowerCase().includes(q);
-            const matchesCat = filterCategory === 'all' || p.category === filterCategory;
-            let matchesPkg = true;
-            if (filterPackaging === 'bulk') matchesPkg = packSize > 1;
-            if (filterPackaging === 'single') matchesPkg = packSize === 1;
-            return matchesQuery && matchesCat && matchesPkg;
+            const st = statusOf(p);
+            if (filterStatus === 'Archived' ? p.isActive !== false : p.isActive === false) return false;
+            if (filterStatus !== 'All' && filterStatus !== 'Archived' && st !== filterStatus) return false;
+            if (filterCategory !== 'all' && p.category !== filterCategory) return false;
+            const has = (p.packs || []).length > 0;
+            if (filterPackaging === 'bulk' && !has) return false;
+            if (filterPackaging === 'single' && has) return false;
+            return !q || p.name.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q) || (p.barcode || '').toLowerCase().includes(q) || (p.packs || []).some((k) => (k.barcode || '').toLowerCase().includes(q));
         });
-    }, [products, search, filterCategory, filterPackaging]);
+    }, [products, search, filterStatus, filterCategory, filterPackaging]);
 
-    const openAddModal = () => {
-        if (!effectiveBranch) return toast.error('Select a branch first');
-        setEditingId(null);
-        setForm(EMPTY_FORM);
-        if (fileRef.current) fileRef.current.value = '';
-        setShowProductModal(true);
+    const goReceive = (p, key) => {
+        if (p.isActive === false) return toast.error(`${p.name} is archived. Restore it first.`);
+        setFocusReq({ id: p._id, key, n: Date.now() }); setTab('receive'); window.scrollTo({ top: 0 });
     };
 
-    const startEdit = (item) => {
-        setEditingId(item._id);
-        const bulk = (item.packSize || 1) > 1;
-        setForm({
-            ...EMPTY_FORM,
-            name: item.name,
-            barcode: item.barcode || '',
-            category: item.category,
-            unit: item.unit?._id || item.unit || '',
-            sellingPrice: item.sellingPrice,
-            reorderLevel: item.reorderLevel || '',
-            isBulk: bulk,
-            packSize: String(item.packSize || 10),
-            caseLabel: item.caseLabel || 'Carton',
-            caseBarcode: item.caseBarcode || '',
-            casePrice: item.casePrice ?? '',
-            imageUrl: item.imageUrl || '',
-            imagePublicId: item.imagePublicId || '',
-            vatClass: item.vatClass || 'standard',
-        });
-        setShowProductModal(true);
+    const afterSave = async (saved, mode) => {
+        setModal(null); await fetchProducts(); await fetchSuppliers();
+        if (mode === 'receive') goReceive(saved);
     };
+    const afterReceive = async (receipt) => { setShownReceipt(receipt); setFocusReq(null); await fetchProducts(); await fetchSuppliers(); fetchReceipts(); setTab('products'); };
 
-    const closeProductModal = () => {
-        setShowProductModal(false);
-        setEditingId(null);
-        setForm(EMPTY_FORM);
-        if (fileRef.current) fileRef.current.value = '';
-    };
-
-    const toggleBulk = () => {
-        setForm((prev) => ({
-            ...prev,
-            isBulk: !prev.isBulk,
-            packSize: !prev.isBulk ? (prev.packSize === '1' ? '10' : prev.packSize) : '1',
-        }));
-    };
-
-    const generateRandomBarcode = () => {
-        setForm((prev) => ({ ...prev, barcode: '6291' + Math.floor(100000000 + Math.random() * 900000000) }));
-    };
-
-    const handleImageUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (file.size > 5 * 1024 * 1024) return toast.error('Max file size is 5MB');
-
+    const confirmPending = async () => {
+        setBusy(true);
         try {
-            setUploading(true);
-
-            const compressed = await imageCompression(file, {
-                maxSizeMB: 1,
-                maxWidthOrHeight: 1600,
-                useWebWorker: true,
-                initialQuality: 0.85,
-            });
-
-            const formData = new FormData();
-            formData.append('image', compressed, file.name);
-
-            const res = await API.post('/products/upload-image', formData, { timeout: 30000 });
-            setForm((prev) => ({ ...prev, imageUrl: res.data.url, imagePublicId: res.data.publicId }));
-            toast.success('Image uploaded');
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Image upload failed');
-        } finally {
-            setUploading(false);
-        }
+            if (pending.type === 'delete') { await API.delete(`/products/${pending.item._id}`); toast.success('Product deleted'); }
+            else { await API.put(`/products/${pending.item._id}`, { isActive: false, branch: effectiveBranch }); toast.success('Product archived'); }
+            setPending(null); fetchProducts();
+        } catch (e) { toast.error(e.response?.data?.message || 'Action failed'); }
+        setBusy(false);
     };
-
-    const removeImage = () => {
-        setForm((prev) => ({ ...prev, imageUrl: '', imagePublicId: '' }));
-        if (fileRef.current) fileRef.current.value = '';
-    };
-
-    const saveItem = async () => {
-        if (!effectiveBranch) return toast.error('Select a branch first');
-        if (!form.name || !form.sellingPrice || !form.unit) {
-            return toast.error('Name, unit and selling price are required');
-        }
-        if (form.openingQty && !form.openingCost && form.openingCost !== 0) {
-            return toast.error('Enter the buying price for the opening stock, or leave both blank');
-        }
-
-        const resolvedPackSize = isBulk ? Math.max(2, packSizeNum) : 1;
-
-        setSaving(true);
-        try {
-            const payload = {
-                name: form.name,
-                barcode: form.barcode || undefined,
-                category: form.category || 'General',
-                unit: form.unit,
-                sellingPrice: parseFloat(form.sellingPrice),
-                casePrice: isBulk && form.casePrice !== '' ? parseFloat(form.casePrice) : null,
-                reorderLevel: form.reorderLevel ? parseFloat(form.reorderLevel) : 0,
-                packSize: resolvedPackSize,
-                caseLabel: isBulk ? (form.caseLabel || 'Carton') : 'Carton',
-                caseBarcode: isBulk ? (form.caseBarcode || null) : null,
-                imageUrl: form.imageUrl || null,
-                imagePublicId: form.imagePublicId || null,
-                branch: effectiveBranch,
-                vatClass: form.vatClass || 'standard',
-            };
-
-            if (editingId) {
-                await API.put(`/products/${editingId}`, payload);
-                toast.success('Product updated');
-            } else {
-                const created = await API.post('/products', payload);
-                if (form.openingQty) {
-                    await API.post(`/products/${created.data._id}/receive-stock`, {
-                        quantity: parseFloat(form.openingQty),
-                        costPerUnit: parseFloat(form.openingCost),
-                        receivedAs: isBulk ? form.openingReceivedAs : 'each',
-                        expiryDate: form.openingExpiryDate || null,
-                    });
-                    toast.success('Product added with opening stock');
-                } else {
-                    toast.success('Product added — remember to receive its opening stock');
-                }
-            }
-            closeProductModal();
-            fetchProducts();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to save product');
-        }
-        setSaving(false);
-    };
-
-    const confirmDelete = async () => {
-        setDeleting(true);
-        try {
-            await API.delete(`/products/${pendingDelete._id}`);
-            toast.success('Product deleted');
-            setPendingDelete(null);
-            fetchProducts();
-        } catch (err) {
-            toast.error('Failed to delete product');
-        }
-        setDeleting(false);
-    };
-
-    const submitStock = async () => {
-        if (!stockForm.quantity || stockForm.costPerUnit === '') {
-            return toast.error('Quantity and cost are required');
-        }
-        setReceiving(true);
-        try {
-            await API.post(`/products/${receivingFor._id}/receive-stock`, {
-                quantity: parseFloat(stockForm.quantity),
-                costPerUnit: parseFloat(stockForm.costPerUnit),
-                receivedAs: stockForm.receivedAs,
-                expiryDate: stockForm.expiryDate || null,
-                supplierNote: stockForm.supplierNote,
-            });
-            toast.success(`Stock received for ${receivingFor.name}`);
-            setReceivingFor(null);
-            setStockForm(EMPTY_STOCK);
-            fetchProducts();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to receive stock');
-        }
-        setReceiving(false);
-    };
+    const restore = async (p) => { try { await API.put(`/products/${p._id}`, { isActive: true, branch: effectiveBranch }); toast.success('Product restored'); fetchProducts(); } catch (e) { toast.error(e.response?.data?.message || 'Failed to restore'); } };
 
     const addUnit = async () => {
-        if (!unitForm.name || !unitForm.abbreviation) {
-            return toast.error('Name and abbreviation are required');
-        }
+        if (!unitForm.name || !unitForm.abbreviation) return toast.error('Name and abbreviation are required');
         setSavingUnit(true);
-        try {
-            await API.post('/inventory/units', unitForm);
-            toast.success('Unit added');
-            setUnitForm(EMPTY_UNIT);
-            fetchUnits();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to add unit');
-        }
+        try { await API.post('/inventory/units', unitForm); toast.success('Unit added'); setUnitForm(EMPTY_UNIT); fetchUnits(); }
+        catch (e) { toast.error(e.response?.data?.message || 'Failed to add unit'); }
         setSavingUnit(false);
     };
-
-    const removeUnit = async (unit) => {
-        setDeletingUnitId(unit._id);
-        try {
-            await API.delete(`/inventory/units/${unit._id}`);
-            toast.success('Unit removed');
-            fetchUnits();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Unit is in use — cannot remove');
-        }
+    const removeUnit = async (u) => {
+        setDeletingUnitId(u._id);
+        try { await API.delete(`/inventory/units/${u._id}`); toast.success('Unit removed'); fetchUnits(); }
+        catch (e) { toast.error(e.response?.data?.message || 'Unit is in use — cannot remove'); }
         setDeletingUnitId(null);
     };
 
-    const hasCase = receivingFor && (receivingFor.packSize || 1) > 1;
-    const stockQtyNum = parseFloat(stockForm.quantity) || 0;
-    const stockCostNum = parseFloat(stockForm.costPerUnit) || 0;
-    const stockPreview = hasCase && stockForm.receivedAs === 'case' && stockQtyNum > 0
-        ? { pieces: stockQtyNum * receivingFor.packSize, costEach: stockCostNum / receivingFor.packSize }
-        : null;
-
-    const openQtyNum = parseFloat(form.openingQty) || 0;
-    const openCostNum = parseFloat(form.openingCost) || 0;
-    const editingProduct = editingId ? products.find((p) => p._id === editingId) : null;
-    const modalCostPerEach = editingId
-        ? avgCostPerEach(editingProduct || {})
-        : (openQtyNum > 0
-            ? (isBulk && form.openingReceivedAs === 'case' ? openCostNum / packSizeNum : openCostNum)
-            : 0);
-    const modalSellingPrice = parseFloat(form.sellingPrice) || 0;
-    const modalCasePrice = parseFloat(form.casePrice) || 0;
-    const eachProfit = modalSellingPrice - modalCostPerEach;
-    const caseProfit = isBulk ? modalCasePrice - modalCostPerEach * packSizeNum : 0;
-    const showProfitPreview = modalCostPerEach > 0 && modalSellingPrice > 0;
+    const openNew = (name = '') => (effectiveBranch ? setModal({ product: null, name }) : toast.error('Select a branch first'));
 
     return (
         <div className="space-y-6 bg-gray-50 text-gray-800">
-
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h2 className="text-2xl font-black text-gray-800">Products & Stock</h2>
-                    <p className="text-sm text-gray-500">Add products, receive stock batches, print labels, and track expiry</p>
-                </div>
+                <div><h2 className="text-2xl font-black text-gray-800">Products & Stock</h2><p className="text-sm text-gray-500">Buy in cartons, boxes or sacks. The system counts the pieces.</p></div>
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setShowUnitManager((v) => !v)}
-                        className="flex items-center gap-2 bg-white border border-gray-200 hover:border-orange-400 text-sm font-bold text-gray-700 hover:text-orange-500 px-4 py-2 rounded-xl shadow-sm transition-colors"
-                    >
-                        <Boxes size={15} /> Manage Units
-                    </button>
-                    <button
-                        onClick={() => setShowReceivePicker(true)}
-                        className="flex items-center gap-2 bg-white border border-gray-200 hover:border-orange-400 text-sm font-bold text-gray-700 hover:text-orange-500 px-4 py-2 rounded-xl shadow-sm transition-colors"
-                    >
-                        <PackagePlus size={15} /> Receive Stock
-                    </button>
-                    <button
-                        onClick={openAddModal}
-                        className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange-hover text-white px-4 py-2 rounded-xl text-sm font-extrabold shadow-sm transition"
-                    >
-                        <Plus size={16} /> Add New Product
-                    </button>
+                    <button onClick={() => { setFocusReq(null); setTab('receive'); }} className="flex items-center gap-2 bg-white border border-gray-200 hover:border-orange-400 text-sm font-bold text-gray-700 px-4 py-2 rounded-xl shadow-sm"><PackagePlus size={15} />Receive stock</button>
+                    <button onClick={() => openNew()} className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange-hover text-white px-4 py-2 rounded-xl text-sm font-extrabold shadow-sm"><Plus size={16} />New product</button>
                 </div>
             </div>
 
-            {branch !== undefined && !branch && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold rounded-xl px-4 py-3">
-                    You're viewing All Branches — pick a branch above to add products or receive stock.
+            <nav className="flex gap-1 bg-gray-100 rounded-full p-1 overflow-x-auto w-fit max-w-full">
+                {TABS.map(([k, t, Icon]) => (
+                    <button key={k} onClick={() => { if (k === 'receive') setFocusReq(null); setTab(k); }} className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${tab === k ? 'bg-brand-orange text-white' : 'text-gray-600'}`}><Icon size={14} />{t}</button>
+                ))}
+            </nav>
+
+            {branch !== undefined && !branch && <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold rounded-xl px-4 py-3">You're viewing All Branches. Pick a branch above to add products or receive stock.</div>}
+
+            {tab === 'products' && (<>
+                <ProductStats stats={stats} />
+                {showLowStockBanner && lowStockItems.length > 0 && <LowStockBanner items={lowStockItems} onDismiss={() => setShowLowStockBanner(false)} />}
+                <ProductFilters search={search} setSearch={setSearch} filterPackaging={filterPackaging} setFilterPackaging={setFilterPackaging}
+                    filterCategory={filterCategory} setFilterCategory={setFilterCategory} filterStatus={filterStatus} setFilterStatus={setFilterStatus} categories={categories} />
+                <ProductTable products={filtered} canDelete={canDelete}
+                    onReceiveStock={goReceive} onReportLoss={setAdjustingFor} onPrintLabel={setLabelFor}
+                    onEdit={(p) => setModal({ product: p })} onArchive={(p) => setPending({ type: 'archive', item: p })} onRestore={restore} onDelete={(p) => setPending({ type: 'delete', item: p })} />
+            </>)}
+
+            {tab === 'receive' && <ReceiveStock products={products} suppliers={suppliers} branch={effectiveBranch} focusReq={focusReq}
+                onDone={afterReceive} onEditProduct={(p) => setModal({ product: p })} onCreateProduct={(name) => openNew(name)} />}
+
+            {tab === 'packs' && (
+                <div className="space-y-4">
+                    <div className="rounded-2xl p-5 bg-orange-50 border border-orange-100 text-sm text-gray-700">
+                        <b>How packs work:</b> every product has one <b>base unit</b> (pieces, kg or litres). Add packs such as <b>Carton = 24 pcs</b> or <b>Sack = 50 kg</b>, and optionally a <b>selling price per pack</b>. When receiving, pick how you bought it, or mix units (10 boxes + 12 pcs), and the system converts to the base unit.
+                    </div>
+                    <button onClick={() => setShowUnitManager((v) => !v)} className="flex items-center gap-2 bg-white border border-gray-200 text-sm font-bold text-gray-700 px-4 py-2 rounded-xl"><Boxes size={15} />Manage measurement units</button>
+                    {showUnitManager && <UnitManager units={units} unitForm={unitForm} setUnitForm={setUnitForm} onAdd={addUnit} savingUnit={savingUnit} deletingUnitId={deletingUnitId} onRemove={removeUnit} />}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {active.map((p) => (
+                            <div key={p._id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+                                <p className="font-bold">{p.name}</p>
+                                <p className="text-xs text-gray-500">{p.category} · Stock <b>{num(stockOf(p))} {baseAbbr(p)}</b>{packsOf(p).length && stockOf(p) > 0 ? ` (${breakdown(p, stockOf(p))})` : ''}</p>
+                                <div className="flex flex-wrap gap-1.5 mt-3">
+                                    {packsOf(p).length ? [...packsOf(p)].reverse().map((k) => <span key={k._id} className="sk-chip">1 {k.name} = {num(k.qty)} {baseAbbr(p)} · {money(k.price > 0 ? k.price : p.sellingPrice * k.qty)}</span>)
+                                        : <span className="text-xs text-gray-400">Sold only as single {baseAbbr(p)}</span>}
+                                </div>
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={() => setModal({ product: p })} className="flex-1 px-3 py-2 text-xs font-bold border border-gray-200 rounded-xl">Manage packs</button>
+                                    <button onClick={() => goReceive(p)} className="flex-1 px-3 py-2 text-xs font-bold bg-brand-orange text-white rounded-xl">Add stock</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
-            <ProductStats stats={stats} />
+            {tab === 'history' && <ReceiptHistory receipts={receipts} suppliers={suppliers} supplierFilter={supplierFilter} setSupplierFilter={setSupplierFilter} />}
 
-            {showLowStockBanner && lowStockItems.length > 0 && (
-                <LowStockBanner items={lowStockItems} onDismiss={() => setShowLowStockBanner(false)} />
-            )}
+            {tab === 'suppliers' && <SuppliersManager suppliers={suppliers} branch={effectiveBranch} canDelete={canDelete} refresh={fetchSuppliers}
+                onViewDeliveries={(s) => { setSupplierFilter(s._id); setTab('history'); }} />}
 
-            {showUnitManager && (
-                <UnitManager
-                    units={units}
-                    unitForm={unitForm}
-                    setUnitForm={setUnitForm}
-                    onAdd={addUnit}
-                    savingUnit={savingUnit}
-                    deletingUnitId={deletingUnitId}
-                    onRemove={removeUnit}
-                />
-            )}
+            {modal && <ProductFormModal key={modal.product?._id || 'new'} product={modal.product} initialName={modal.name} units={units} categories={categories} suppliers={suppliers}
+                branch={effectiveBranch} onClose={() => setModal(null)} onSaved={afterSave} onOpenUnitManager={() => { setModal(null); setTab('packs'); setShowUnitManager(true); }} />}
 
-            <ProductFilters
-                search={search}
-                setSearch={setSearch}
-                filterPackaging={filterPackaging}
-                setFilterPackaging={setFilterPackaging}
-                filterCategory={filterCategory}
-                setFilterCategory={setFilterCategory}
-                categories={categories}
-            />
-
-            <ProductTable
-                products={filteredProducts}
-                onReceiveStock={(item) => { setReceivingFor(item); setStockForm(EMPTY_STOCK); }}
-                onReportLoss={(item) => setAdjustingFor(item)}
-                onPrintLabel={(item) => setLabelFor(item)}
-                onEdit={startEdit}
-                onDelete={(item) => setPendingDelete(item)}
-            />
-
-            <ProductFormModal
-                open={showProductModal}
-                editingId={editingId}
-                form={form}
-                setForm={setForm}
-                units={units}
-                categories={categories}
-                isBulk={isBulk}
-                unitAbbr={unitAbbr}
-                uploading={uploading}
-                saving={saving}
-                fileRef={fileRef}
-                onToggleBulk={toggleBulk}
-                onGenerateBarcode={generateRandomBarcode}
-                onImageUpload={handleImageUpload}
-                onRemoveImage={removeImage}
-                onClose={closeProductModal}
-                onSave={saveItem}
-                onOpenUnitManager={() => setShowUnitManager(true)}
-                showProfitPreview={showProfitPreview}
-                modalCostPerEach={modalCostPerEach}
-                eachProfit={eachProfit}
-                modalCasePrice={modalCasePrice}
-                caseProfit={caseProfit}
-            />
-
-            <ReceiveStockModal
-                receivingFor={receivingFor}
-                pickerOpen={showReceivePicker}
-                productOptions={products}
-                onPickProduct={(item) => {
-                    if (item) {
-                        setReceivingFor(item);
-                        setStockForm(EMPTY_STOCK);
-                        setShowReceivePicker(false);
-                    } else {
-                        // back-arrow from the form (only reachable when opened via
-                        // the picker) — deselect and show the search list again
-                        setReceivingFor(null);
-                        setShowReceivePicker(true);
-                    }
-                }}
-                stockForm={stockForm}
-                setStockForm={setStockForm}
-                onClose={() => { setReceivingFor(null); setStockForm(EMPTY_STOCK); setShowReceivePicker(false); }}
-                onSubmit={submitStock}
-                receiving={receiving}
-                stockPreview={stockPreview}
-                hasCase={hasCase}
-            />
-
-            <StockAdjustmentModal
-                product={adjustingFor}
-                open={!!adjustingFor}
-                onClose={() => setAdjustingFor(null)}
-                onSubmitted={fetchProducts}
-            />
-
+            <StockAdjustmentModal product={adjustingFor} open={!!adjustingFor} onClose={() => setAdjustingFor(null)} onSubmitted={fetchProducts} />
             {labelFor && <LabelPrintModal product={labelFor} onClose={() => setLabelFor(null)} />}
+            {shownReceipt && <ReceiptModal r={shownReceipt} fresh onClose={() => setShownReceipt(null)} />}
 
-            <ConfirmModal
-                open={!!pendingDelete}
-                title="Delete product?"
-                description={`Remove "${pendingDelete?.name}" from the catalog? This can't be undone.`}
-                confirmLabel="Delete"
-                tone="danger"
-                loading={deleting}
-                onConfirm={confirmDelete}
-                onClose={() => setPendingDelete(null)}
-            />
+            <ConfirmModal open={!!pending} tone={pending?.type === 'delete' ? 'danger' : undefined} loading={busy}
+                title={pending?.type === 'delete' ? 'Delete product?' : 'Archive product?'}
+                description={pending?.type === 'delete' ? `Permanently remove "${pending?.item?.name}" from the catalog? This can't be undone.` : `Hide "${pending?.item?.name}" from search and receiving? Its history is kept and you can restore it any time.`}
+                confirmLabel={pending?.type === 'delete' ? 'Delete' : 'Archive'} onConfirm={confirmPending} onClose={() => setPending(null)} />
 
             <style>{`
                 .input { width: 100%; background: rgb(249 250 251); border: 1px solid rgb(229 231 235); border-radius: 0.75rem; padding: 0.6rem 0.85rem; font-size: 0.875rem; color: rgb(31 41 55); }
-                .input:focus { outline: none; border-color: rgb(249 115 22); background: white; box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1); }
+                .input:focus { outline: none; border-color: rgb(249 115 22); background: white; box-shadow: 0 0 0 2px rgba(249,115,22,.1); }
                 .input::placeholder { color: rgb(156 163 175); }
+                .sk-label { display:block; font-size:.65rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#78716c; margin-bottom:.3rem; }
+                .sk-chip { display:inline-flex; align-items:center; gap:.3rem; padding:.3rem .8rem; border-radius:999px; font-size:.72rem; font-weight:600; color:#57534e; border:1px solid #e7e5e4; background:#fff; }
+                .sk-chip:hover { border-color:#f97316; } .sk-chip.on { background:#f97316; border-color:#f97316; color:#fff; }
+                .sk-seg { display:flex; flex-wrap:wrap; gap:.25rem; background:#f5f5f4; border:1px solid #e7e5e4; border-radius:.75rem; padding:.25rem; }
+                .sk-seg button { flex:1; min-width:70px; padding:.5rem .7rem; border-radius:.55rem; font-size:.78rem; font-weight:600; color:#57534e; }
+                .sk-seg button.on { background:#f97316; color:#fff; }
+                .sk-stp { width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; border-radius:.75rem; border:1px solid #e7e5e4; background:#fff; flex-shrink:0; }
+                .sk-flag { display:flex; gap:.4rem; font-size:.72rem; font-weight:500; padding:.4rem .6rem; border-radius:.5rem; }
+                .sk-flag.err { background:#fef2f2; color:#b91c1c; } .sk-flag.warn { background:#fffbeb; color:#b45309; } .sk-flag.info { background:#eff6ff; color:#1d4ed8; }
             `}</style>
         </div>
     );
-           }
+                                            }
