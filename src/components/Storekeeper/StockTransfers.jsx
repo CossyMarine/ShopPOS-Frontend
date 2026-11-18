@@ -5,7 +5,7 @@ import { ArrowRightLeft, Plus, RefreshCw, Truck, PackageCheck, XCircle, Store } 
 import API from '../../api/axios';
 import { useAuth } from '../../hooks/useAuth';
 import { formatKenyanDateTime } from '../../utils/formatDate';
-import ConfirmModal from '../Admin/ConfirmModal';
+import ConfirmDialog from './ConfirmDialog';
 import NewTransferModal from './NewTransferModal';
 import ReceiveTransferModal from './ReceiveTransferModal';
 
@@ -87,7 +87,7 @@ export default function StockTransfers({ branch }) {
     const branchName = (id) => branches.find((b) => b._id === id)?.name || '—';
 
     return (
-        <div className="space-y-6 bg-gray-50 text-gray-800">
+        <div className="space-y-6 bg-gray-100 text-gray-800">
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
@@ -221,7 +221,7 @@ export default function StockTransfers({ branch }) {
                 onReceived={fetchTransfers}
             />
 
-            <ConfirmModal
+            <ConfirmDialog
                 open={!!pendingAction}
                 title={pendingAction?.action === 'dispatch' ? 'Dispatch this transfer?' : 'Cancel this transfer?'}
                 description={
@@ -232,6 +232,7 @@ export default function StockTransfers({ branch }) {
                             : 'This draft will be discarded. Nothing was ever deducted.'
                 }
                 confirmLabel={pendingAction?.action === 'dispatch' ? 'Dispatch' : 'Cancel Transfer'}
+                cancelLabel={pendingAction?.action === 'cancel' ? 'Keep transfer' : 'Cancel'}
                 tone={pendingAction?.action === 'cancel' ? 'danger' : 'default'}
                 loading={working}
                 onConfirm={runAction}
@@ -239,4 +240,4 @@ export default function StockTransfers({ branch }) {
             />
         </div>
     );
-                        }
+}
