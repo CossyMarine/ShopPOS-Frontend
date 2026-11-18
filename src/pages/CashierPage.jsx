@@ -187,7 +187,8 @@ export default function CashierPage() {
                 toast.warn(`${result.discrepancies} synced sale(s) had a stock mismatch — check with your manager`);
             }
             if (result.failures?.length > 0) {
-                toast.error(`${result.failures.length} sale(s) failed to sync — still saved on this device`);
+               const reason = result.failures[0]?.error;
+               toast.error(`${result.failures.length} sale(s) failed to sync — still saved on this device${reason ? `: ${reason}` : ''}`);
             }
         } catch {
             // Sync failed outright (e.g. connection dropped again mid-sync) —
