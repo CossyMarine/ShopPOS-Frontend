@@ -352,19 +352,20 @@ export default function CashierPage() {
     // ---- Confirms an offline cash sale: no server call, just writes the
     // sale to the local queue and clears the cart immediately so the
     // cashier can keep ringing up the next customer without delay. ----
-    const handleOfflineCashConfirm = async () => {
-        const sale = buildOfflineSale({
-            cart,
-            branch: user.branch,
-            shiftId: shift?._id,
-            totalDue,
-        });
-        await queueOfflineSale(sale);
-        setShowOfflinePayment(false);
-        clearCart();
-        refreshPendingCount();
-        toast.success("Sale saved — will sync automatically once you're back online");
-    };
+    const handleOfflineCashConfirm = async (payment) => {
+    const sale = buildOfflineSale({
+        cart,
+        branch: user.branch,
+        shiftId: shift?._id,
+        totalDue,
+        tillAmount: payment?.tillAmount,
+    });
+    await queueOfflineSale(sale);
+    setShowOfflinePayment(false);
+    clearCart();
+    refreshPendingCount();
+    toast.success("Sale saved — will sync automatically once you're back online");
+};
 
     const handlePaymentComplete = () => {
         setShowPayment(false);
