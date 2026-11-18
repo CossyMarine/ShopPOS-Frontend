@@ -113,7 +113,15 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
 
-      <ToastContainer position="top-right" theme="light" autoClose={3000} />
+      <ToastContainer
+        position="top-right"
+        theme="colored"
+        autoClose={3500}
+        limit={4}
+        newestOnTop
+        pauseOnHover
+        toastClassName="!rounded-2xl !font-semibold !shadow-xl"
+      />
       <PWAPrompt />
       <DesktopModeToggle floating />
     </BrowserRouter>
@@ -126,4 +134,4 @@ export default function App() {
       <AppRoutes />
     </AuthProvider>
   );
-}
+        }
