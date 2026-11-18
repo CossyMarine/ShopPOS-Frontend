@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { X, Banknote, Smartphone, Landmark, Layers, Gift, CheckCircle2, Printer } from 'lucide-react';
 import API from '../../api/axios';
+import useConfirm from '../Storekeeper/useConfirm';
 
 const METHODS = [
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'gray' },
@@ -16,6 +17,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
     const [processing, setProcessing] = useState(false);
     const [stkStatus, setStkStatus] = useState(null); // 'pending' | 'success' | 'failed'
     const [closing, setClosing] = useState(false);
+    const [ask, confirmDialog] = useConfirm();
     const pollRef = useRef(null);
 
     // ---- "Both" combo: cash / till / reward entered together, any mix,
@@ -165,7 +167,14 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
             toast.error('This bill already has a partial payment — use a void request to cancel it, not close.');
             return;
         }
-        if (!window.confirm('Cancel this sale? Items will be released back to stock.')) return;
+        const ok = await ask({
+            title: 'Cancel this sale?',
+            description: 'Items will be released back to stock.',
+            confirmLabel: 'Cancel sale',
+            cancelLabel: 'Keep sale',
+            tone: 'danger',
+        });
+        if (!ok) return;
 
         setClosing(true);
         clearInterval(pollRef.current);
@@ -323,6 +332,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                     </div>
                 )}
             </div>
+            {confirmDialog}
         </div>
     );
-        }
+}
