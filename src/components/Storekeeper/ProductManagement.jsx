@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Plus, Boxes, PackagePlus, Package, History, Truck } from 'lucide-react';
+import { Plus, Boxes, PackagePlus, Package, History, Truck, Archive } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
-import ConfirmModal from '../Admin/ConfirmModal';
+import ConfirmDialog from './ConfirmDialog';
 import { useAuth } from '../../hooks/useAuth';
 import LabelPrintModal from './LabelPrintModal';
-import { EMPTY_UNIT, packsOf, breakdown, money, num, statusOf } from './productManagementUtils';
+import { EMPTY_UNIT, packsOf, breakdown, money, num, statusOf, avgCostPerEach, unitProfit } from './productManagementUtils';
 import { baseAbbr, stockOf } from '../../utils/receivingMath';
-import { avgCostPerEach } from './productManagementUtils';
 import ProductStats from './ProductStats';
 import LowStockBanner from './LowStockBanner';
 import UnitManager from './UnitManager';
 import ProductFilters from './ProductFilters';
-import ProductTable from './ProductTable';
+import ProductCard from './ProductCard';
+import ArchivedProductsModal from './ArchivedProductsModal';
 import ProductFormModal from './ProductFormModal';
 import ReceiveStock from './ReceiveStock';
 import ReceiptHistory, { ReceiptModal } from './ReceiptHistory';
@@ -44,6 +44,7 @@ export default function ProductManagement({ branch }) {
     const [deletingUnitId, setDeletingUnitId] = useState(null);
     const [supplierFilter, setSupplierFilter] = useState('');
     const [showLowStockBanner, setShowLowStockBanner] = useState(true);
+    const [showArchive, setShowArchive] = useState(false);
 
     const [search, setSearch] = useState('');
     const [filterPackaging, setFilterPackaging] = useState('all');
@@ -63,26 +64,30 @@ export default function ProductManagement({ branch }) {
     useEffect(() => { if (tab === 'history') fetchReceipts(); }, [tab, effectiveBranch]); // eslint-disable-line
 
     const active = useMemo(() => products.filter((p) => p.isActive !== false), [products]);
+    const archived = useMemo(() => products.filter((p) => p.isActive === false), [products]);
     const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(), [products]);
 
     const stats = useMemo(() => {
-        let bulkCount = 0, lowCount = 0, stockValue = 0, potentialProfit = 0;
+        let bulkCount = 0, lowCount = 0, lossCount = 0, stockValue = 0, potentialProfit = 0;
         active.forEach((p) => {
-            const s = stockOf(p), cost = avgCostPerEach(p);
+            const s = stockOf(p), cost = avgCostPerEach(p), up = unitProfit(p);
             if ((p.packs || []).length) bulkCount++;
             if (s === 0 || (p.reorderLevel > 0 && s <= p.reorderLevel)) lowCount++;
+            if (up !== null && up < 0) lossCount++;
             stockValue += s * cost; potentialProfit += s * ((p.sellingPrice || 0) - cost);
         });
-        return { totalSkus: active.length, bulkCount, lowCount, stockValue, potentialProfit };
+        const revenue = stockValue + potentialProfit;
+        return { totalSkus: active.length, bulkCount, lowCount, lossCount, stockValue, potentialProfit, margin: revenue > 0 ? potentialProfit / revenue * 100 : 0 };
     }, [active]);
     const lowStockItems = useMemo(() => active.filter((p) => stockOf(p) === 0 || (p.reorderLevel > 0 && stockOf(p) <= p.reorderLevel)), [active]);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase().trim();
         return products.filter((p) => {
+            if (p.isActive === false) return false;                       // archived live in the Archive view
             const st = statusOf(p);
-            if (filterStatus === 'Archived' ? p.isActive !== false : p.isActive === false) return false;
-            if (filterStatus !== 'All' && filterStatus !== 'Archived' && st !== filterStatus) return false;
+            if (filterStatus === 'Loss') { const up = unitProfit(p); if (!(up !== null && up < 0)) return false; }
+            else if (filterStatus !== 'All' && st !== filterStatus) return false;
             if (filterCategory !== 'all' && p.category !== filterCategory) return false;
             const has = (p.packs || []).length > 0;
             if (filterPackaging === 'bulk' && !has) return false;
@@ -130,16 +135,19 @@ export default function ProductManagement({ branch }) {
     const openNew = (name = '') => (effectiveBranch ? setModal({ product: null, name }) : toast.error('Select a branch first'));
 
     return (
-        <div className="space-y-6 bg-gray-50 text-gray-800">
+        <div className="space-y-6 bg-gray-100 text-gray-800">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div><h2 className="text-2xl font-black text-gray-800">Products & Stock</h2><p className="text-sm text-gray-500">Buy in cartons, boxes or sacks. The system counts the pieces.</p></div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={() => setShowArchive(true)} className="flex items-center gap-2 bg-white border border-gray-200 hover:border-amber-400 text-sm font-bold text-gray-700 px-4 py-2 rounded-xl shadow-sm">
+                        <Archive size={15} />Archive{archived.length > 0 && <span className="bg-amber-500 text-white text-[10px] font-black rounded-full px-1.5 py-0.5">{archived.length}</span>}
+                    </button>
                     <button onClick={() => { setFocusReq(null); setTab('receive'); }} className="flex items-center gap-2 bg-white border border-gray-200 hover:border-orange-400 text-sm font-bold text-gray-700 px-4 py-2 rounded-xl shadow-sm"><PackagePlus size={15} />Receive stock</button>
                     <button onClick={() => openNew()} className="flex items-center gap-2 bg-brand-orange hover:bg-brand-orange-hover text-white px-4 py-2 rounded-xl text-sm font-extrabold shadow-sm"><Plus size={16} />New product</button>
                 </div>
             </div>
 
-            <nav className="flex gap-1 bg-gray-100 rounded-full p-1 overflow-x-auto w-fit max-w-full">
+            <nav className="flex gap-1 bg-white rounded-full p-1 overflow-x-auto w-fit max-w-full shadow-sm">
                 {TABS.map(([k, t, Icon]) => (
                     <button key={k} onClick={() => { if (k === 'receive') setFocusReq(null); setTab(k); }} className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap ${tab === k ? 'bg-brand-orange text-white' : 'text-gray-600'}`}><Icon size={14} />{t}</button>
                 ))}
@@ -152,13 +160,21 @@ export default function ProductManagement({ branch }) {
                 {showLowStockBanner && lowStockItems.length > 0 && <LowStockBanner items={lowStockItems} onDismiss={() => setShowLowStockBanner(false)} />}
                 <ProductFilters search={search} setSearch={setSearch} filterPackaging={filterPackaging} setFilterPackaging={setFilterPackaging}
                     filterCategory={filterCategory} setFilterCategory={setFilterCategory} filterStatus={filterStatus} setFilterStatus={setFilterStatus} categories={categories} />
-                <ProductTable products={filtered} canDelete={canDelete}
-                    onReceiveStock={goReceive} onReportLoss={setAdjustingFor} onPrintLabel={setLabelFor}
-                    onEdit={(p) => setModal({ product: p })} onArchive={(p) => setPending({ type: 'archive', item: p })} onRestore={restore} onDelete={(p) => setPending({ type: 'delete', item: p })} />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
+                    {filtered.length === 0 && <div className="md:col-span-2 2xl:col-span-3 bg-white rounded-3xl p-12 text-center text-gray-400 font-bold shadow-sm">No products found</div>}
+                    {filtered.map((p) => (
+                        <ProductCard key={p._id} p={p} branch={effectiveBranch} canDelete={canDelete} onChanged={fetchProducts}
+                            onReceiveStock={goReceive} onReportLoss={setAdjustingFor} onPrintLabel={setLabelFor}
+                            onEdit={(x) => setModal({ product: x })}
+                            onArchive={(x) => setPending({ type: 'archive', item: x })}
+                            onDelete={(x) => setPending({ type: 'delete', item: x })} />
+                    ))}
+                </div>
             </>)}
 
             {tab === 'receive' && <ReceiveStock products={products} suppliers={suppliers} branch={effectiveBranch} focusReq={focusReq}
-                onDone={afterReceive} onEditProduct={(p) => setModal({ product: p })} onCreateProduct={(name) => openNew(name)} />}
+                onDone={afterReceive} onEditProduct={(p) => setModal({ product: p })} onCreateProduct={(name) => openNew(name)} onProductsChanged={fetchProducts} />}
 
             {tab === 'packs' && (
                 <div className="space-y-4">
@@ -198,10 +214,13 @@ export default function ProductManagement({ branch }) {
             {labelFor && <LabelPrintModal product={labelFor} onClose={() => setLabelFor(null)} />}
             {shownReceipt && <ReceiptModal r={shownReceipt} fresh onClose={() => setShownReceipt(null)} />}
 
-            <ConfirmModal open={!!pending} tone={pending?.type === 'delete' ? 'danger' : undefined} loading={busy}
-                title={pending?.type === 'delete' ? 'Delete product?' : 'Archive product?'}
-                description={pending?.type === 'delete' ? `Permanently remove "${pending?.item?.name}" from the catalog? This can't be undone.` : `Hide "${pending?.item?.name}" from search and receiving? Its history is kept and you can restore it any time.`}
-                confirmLabel={pending?.type === 'delete' ? 'Delete' : 'Archive'} onConfirm={confirmPending} onClose={() => setPending(null)} />
+            {showArchive && <ArchivedProductsModal items={archived} canDelete={canDelete} onClose={() => setShowArchive(false)}
+                onRestore={restore} onDelete={(p) => setPending({ type: 'delete', item: p })} />}
+
+            <ConfirmDialog open={!!pending} tone={pending?.type === 'delete' ? 'danger' : 'default'} loading={busy}
+                title={pending?.type === 'delete' ? 'Delete product forever?' : 'Archive product?'}
+                description={pending?.type === 'delete' ? `Permanently remove "${pending?.item?.name}" from the catalog? This can't be undone.` : `Hide "${pending?.item?.name}" from search and receiving? Its history is kept and you can restore it any time from the Archive.`}
+                confirmLabel={pending?.type === 'delete' ? 'Delete forever' : 'Archive'} onConfirm={confirmPending} onClose={() => setPending(null)} />
 
             <style>{`
                 .input { width: 100%; background: rgb(249 250 251); border: 1px solid rgb(229 231 235); border-radius: 0.75rem; padding: 0.6rem 0.85rem; font-size: 0.875rem; color: rgb(31 41 55); }
@@ -219,4 +238,4 @@ export default function ProductManagement({ branch }) {
             `}</style>
         </div>
     );
-                                            }
+        }
