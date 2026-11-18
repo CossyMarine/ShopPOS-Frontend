@@ -7,10 +7,10 @@ const sumLines = (items = []) => items.reduce((s, i) => s + (Number(i.lineTotal)
 // Builds the local record for one offline sale — everything finalizeSale
 // needs on the server, captured NOW while it's still accurate, since the
 // device may not reconnect for hours.
-export function buildOfflineSale({ cart, branch, customerId, customerName, shiftId, amountPaid, totalDue }) {
-    // CashierPage passes totalDue (cash is confirm-style, exact amount), so
-    // fall back to it, then to the cart total. Must never be NaN/0.
-    const paid = Number(amountPaid ?? totalDue) || sumLines(cart);
+export function buildOfflineSale({ cart, branch, customerId, customerName, shiftId, totalDue, tillAmount }) {
+    const total = Number(totalDue) || sumLines(cart);
+    const till = Math.min(Math.max(Number(tillAmount) || 0, 0), total);
+    const cash = Number((total - till).toFixed(2));
     return {
         clientSaleId: crypto.randomUUID(),
         items: cart.map(({ productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass, promotionName, originalPrice }) => ({
@@ -23,7 +23,8 @@ export function buildOfflineSale({ cart, branch, customerId, customerName, shift
         customerName: customerName || null,
         soldAt: new Date().toISOString(),
         shiftId,
-        cashPayment: { amountPaid: paid },
+        // amountPaid stays as the full total so an older backend still accepts it
+        cashPayment: { amountPaid: total, cashAmount: cash, tillAmount: till },
         queuedAt: new Date().toISOString(),
     };
 }
