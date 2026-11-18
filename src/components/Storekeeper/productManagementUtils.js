@@ -46,3 +46,17 @@ export const statusOf = (p) => {
 };
 
 export const EMPTY_UNIT = { name: '', abbreviation: '' };
+
+export const STORE_NAME = 'Chemalug Mugundoi Supermarket';
+
+// profit per single unit at average cost (null if never received)
+export const unitProfit = (p) => {
+    const c = avgCostPerEach(p);
+    return c > 0 ? (p.sellingPrice || 0) - c : null;
+};
+// profit on the latest batch still on the shelf (cost already includes discounts + transport)
+export const lastStockProfit = (p) => {
+    const b = lastBatch(p);
+    if (!b || !(b.quantity > 0)) return null;
+    return Math.round(((p.sellingPrice || 0) - b.costPerUnit) * b.quantity * 100) / 100;
+};
