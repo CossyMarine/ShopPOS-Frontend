@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react';
 
-const STATUSES = ['All', 'In stock', 'Low', 'Out', 'Archived'];
+const STATUSES = ['All', 'In stock', 'Low', 'Out', 'Loss'];
 
 export default function ProductFilters({ search, setSearch, filterPackaging, setFilterPackaging, filterCategory, setFilterCategory, filterStatus, setFilterStatus, categories }) {
     return (
