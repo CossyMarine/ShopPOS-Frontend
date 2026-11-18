@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Percent, Trash2, Plus } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
+import useConfirm from '../Storekeeper/useConfirm';
 
 export default function DeductionsModal({ open, onClose, staffList }) {
     const [deductions, setDeductions] = useState([]);
@@ -9,6 +10,7 @@ export default function DeductionsModal({ open, onClose, staffList }) {
     const [showForm, setShowForm] = useState(false);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({ name: '', calcType: 'fixed', amount: '', appliesTo: 'all', users: [] });
+    const [ask, confirmDialog] = useConfirm();
 
     const fetchDeductions = async () => {
         setLoading(true);
@@ -59,10 +61,16 @@ export default function DeductionsModal({ open, onClose, staffList }) {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Remove this deduction?')) return;
+    const handleDelete = async (d) => {
+        const ok = await ask({
+            title: 'Remove deduction?',
+            description: `Remove "${d.name}" from payroll deductions? This can't be undone.`,
+            confirmLabel: 'Remove',
+            tone: 'danger',
+        });
+        if (!ok) return;
         try {
-            await API.delete(`/deductions/${id}`);
+            await API.delete(`/deductions/${d._id}`);
             toast.success('Deduction removed');
             fetchDeductions();
         } catch {
@@ -101,7 +109,7 @@ export default function DeductionsModal({ open, onClose, staffList }) {
                                         className={`text-[10px] font-extrabold px-2 py-1 rounded-lg ${d.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
                                         {d.isActive ? 'Active' : 'Paused'}
                                     </button>
-                                    <button onClick={() => handleDelete(d._id)} className="text-gray-400 hover:text-red-500 p-1">
+                                    <button onClick={() => handleDelete(d)} className="text-gray-400 hover:text-red-500 p-1">
                                         <Trash2 size={14} />
                                     </button>
                                 </div>
@@ -166,6 +174,7 @@ export default function DeductionsModal({ open, onClose, staffList }) {
 
                 <style>{`.input { width: 100%; background: white; border: 1px solid rgb(229 231 235); border-radius: 0.75rem; padding: 0.55rem 0.75rem; font-size: 0.8rem; font-weight: 600; } .input:focus { outline: none; border-color: rgb(249 115 22); }`}</style>
             </div>
+            {confirmDialog}
         </div>
     );
-}
+    }
