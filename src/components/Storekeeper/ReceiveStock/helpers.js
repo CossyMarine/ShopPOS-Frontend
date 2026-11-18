@@ -41,4 +41,13 @@ export function flagsFor(l, p, c) {
     if (c.rej > 0 && c.rej <= c.recv) f.push(['info', `${num(c.rej)} ${baseAbbr(p)} rejected, not added or charged.`]);
     return f;
 }
+
+// Total profit (or loss, negative) on the stock being received in this line.
+// c.eff is the real landed cost per base unit, so it already includes
+// discounts, free units and the line's share of transport/delivery.
+export const lineProfit = (l, p, c) => {
+    const price = +l.newPrice > 0 ? +l.newPrice : p.sellingPrice;
+    return c.added > 0 && c.eff > 0 && price > 0 ? r2((price - c.eff) * c.added) : null;
+};
+
 export const FLAG_CLS = { err: 'err', warn: 'warn', info: 'info' };
