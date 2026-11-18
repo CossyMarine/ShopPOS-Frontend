@@ -279,20 +279,27 @@ export default function ReceiveStock({ products, suppliers, branch, focusReq, on
 
     const supplierMatch = suppliers.find((s) => s.isActive !== false && s.name.trim().toLowerCase() === inv.supplier.trim().toLowerCase());
     const valid = lines.filter((l) => byId.has(String(l.pid)));
-    const wire = { lines: valid.map(toWire), discPct: inv.discPct, discAmt: inv.discAmt, delivery: inv.delivery, vatOn: inv.vatOn, vatMode: inv.vatMode, vatNR: inv.vatNR };
-    const D = valid.length ? calcDelivery(wire, byId) : null;
-    const T = D?.totals || { gross: 0, lineDisc: 0, invDisc: 0, free: 0, vat: 0, delivery: 0, total: 0, saved: 0 };
-    const flags = valid.map((l, i) => flagsFor(l, byId.get(String(l.pid)), D.L[i].c));
-    const issues = []; valid.forEach((l, i) => flags[i].forEach((f) => { if (f[0] !== 'info') issues.push({ lvl: f[0], id: l.id, name: byId.get(String(l.pid)).name, msg: f[1] }); }));
+    // Lines being saved right now: only the focused product in
+    // "receive one product" mode, otherwise the whole delivery.
     const visible = focus ? valid.filter((l) => l.pid === focus) : valid;
+    const hiddenCount = valid.length - visible.length;
+
+    const wire = { lines: visible.map(toWire), discPct: inv.discPct, discAmt: inv.discAmt, delivery: inv.delivery, vatOn: inv.vatOn, vatMode: inv.vatMode, vatNR: inv.vatNR };
+    const D = visible.length ? calcDelivery(wire, byId) : null;
+    const T = D?.totals || { gross: 0, lineDisc: 0, invDisc: 0, free: 0, vat: 0, delivery: 0, total: 0, saved: 0 };
+    const flags = visible.map((l, i) => flagsFor(l, byId.get(String(l.pid)), D.L[i].c));
+    const issues = []; visible.forEach((l, i) => flags[i].forEach((f) => { if (f[0] !== 'info') issues.push({ lvl: f[0], id: l.id, name: byId.get(String(l.pid)).name, msg: f[1] }); }));
     const setI = (k, v) => setInv((s) => ({ ...s, [k]: v }));
     const dueNote = inv.terms === 'Cash on delivery' ? 'Payment: on delivery.' : `Payment due ${new Date(new Date(inv.ddate || today()).getTime() + parseInt(inv.terms, 10) * 864e5).toLocaleDateString()} (${inv.terms}).`;
 
     const confirmAll = async (allowDuplicate = false) => {
-        if (!valid.length) return toast.error('Add at least one product first.');
+        if (!visible.length) return toast.error('Add at least one product first.');
         if (!branch) return toast.error('Select a branch first.');
         if (D.errors.length) return toast.error(D.errors[0]);
-        if (!allowDuplicate && !window.confirm(`Add ${valid.length} product${valid.length > 1 ? 's' : ''} to stock?\nTotal to pay: KES ${money(T.total)}${T.saved > 0 ? `\nYou save: KES ${money(T.saved)}` : ''}${issues.filter((i) => i.lvl === 'warn').length ? `\n\n${issues.filter((i) => i.lvl === 'warn').length} warning(s) still open.` : ''}`)) return;
+        const warns = issues.filter((i) => i.lvl === 'warn').length;
+        if (!allowDuplicate && !window.confirm(
+            `Add ${visible.length} product${visible.length > 1 ? 's' : ''} to stock?\nTotal to pay: KES ${money(T.total)}${T.saved > 0 ? `\nYou save: KES ${money(T.saved)}` : ''}${warns ? `\n\n${warns} warning(s) still open.` : ''}${hiddenCount ? `\n\n${hiddenCount} other product(s) stay in your draft.` : ''}`
+        )) return;
         setSaving(true);
         try {
             const { data } = await API.post('/goods-receipts', {
@@ -300,13 +307,20 @@ export default function ReceiveStock({ products, suppliers, branch, focusReq, on
                 supplier: supplierMatch?._id || null, supplierName: inv.supplier.trim(), createSupplier: !supplierMatch && !!inv.supplier.trim() && inv.saveSupplier,
                 invoice: inv.invoice, po: inv.po, deliveryDate: inv.ddate, driver: inv.driver, terms: inv.terms, receivedByName: inv.recvBy, note: inv.note,
             });
-            localStorage.removeItem(key);
-            setLines([]); setFocus(null); setInv(blankInv(inv.recvBy));
+            // Remove only the lines that were saved. Other lines stay in the draft.
+            const savedIds = new Set(visible.map((l) => l.id));
+            const rest = lines.filter((l) => !savedIds.has(l.id));
+            setLines(rest);
+            if (!rest.length) localStorage.removeItem(key);
+            setFocus(null);
+            setInv(blankInv(inv.recvBy));
+            if (rest.length) toast.info(`${rest.length} other product${rest.length > 1 ? 's are' : ' is'} still in your draft.`);
             await onDone(data);
         } catch (er) {
             const d = er.response?.data;
-            if (er.response?.status === 409 && d?.details?.duplicate) { if (window.confirm(`${d.message}\n\nReceive it again anyway?`)) { setSaving(false); return confirmAll(true); } }
-            else toast.error(d?.message || 'Failed to receive stock');
+            if (er.response?.status === 409 && d?.details?.duplicate) {
+                if (window.confirm(`${d.message}\n\nReceive it again anyway?`)) { setSaving(false); return confirmAll(true); }
+            } else toast.error(d?.message || 'Failed to receive stock');
         }
         setSaving(false);
     };
@@ -348,12 +362,12 @@ export default function ReceiveStock({ products, suppliers, branch, focusReq, on
                     </div>
                 )}
 
-                {visible.map((l) => {
-                    const i = valid.indexOf(l), p = byId.get(String(l.pid));
+                {visible.map((l, i) => {
+                    const p = byId.get(String(l.pid));
                     return <Line key={l.id} l={l} p={p} c={D.L[i].c} flags={flags[i]} patch={(x) => patchLine(l.id, x)}
                         onRemove={() => { setLines((ls) => ls.filter((z) => z.id !== l.id)); if (focus === l.pid) setFocus(null); }} onEdit={() => onEditProduct(p)} />;
                 })}
-                {!valid.length && <div className="text-center py-14 rounded-2xl border-2 border-dashed border-gray-300 text-gray-400 text-sm"><Package size={44} className="mx-auto mb-2" />No products yet. Scan or search above.</div>}
+                {!visible.length && <div className="text-center py-14 rounded-2xl border-2 border-dashed border-gray-300 text-gray-400 text-sm"><Package size={44} className="mx-auto mb-2" />No products yet. Scan or search above.</div>}
 
                 <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                     <button type="button" onClick={() => setShowDel((v) => !v)} className="w-full flex items-center justify-between gap-3 p-5 text-left">
@@ -407,10 +421,13 @@ export default function ReceiveStock({ products, suppliers, branch, focusReq, on
                         {issues.slice(0, 5).map((i, k) => <button key={k} type="button" onClick={() => { setFocus(null); document.getElementById('top')?.scrollIntoView(); }} className={`sk-flag ${i.lvl} w-full text-left`}><span><b>{i.name}:</b> {i.msg}</span></button>)}
                         {issues.length > 5 && <p className="text-[11px] text-gray-400">+ {issues.length - 5} more</p>}
                     </div>
-                    <button type="button" disabled={saving} onClick={() => confirmAll(false)} className="w-full mt-5 py-3.5 bg-brand-orange hover:bg-brand-orange-hover text-white font-bold text-sm rounded-xl shadow-md disabled:opacity-50">{saving ? 'Saving…' : 'Confirm and add to stock'}</button>
+                    {hiddenCount > 0 && (
+                        <div className="sk-flag info mt-4">Only this product will be saved. {hiddenCount} other product{hiddenCount > 1 ? 's stay' : ' stays'} in your draft until you finish {hiddenCount > 1 ? 'them' : 'it'}.</div>
+                    )}
+                    <button type="button" disabled={saving} onClick={() => confirmAll(false)} className="w-full mt-5 py-3.5 bg-brand-orange hover:bg-brand-orange-hover text-white font-bold text-sm rounded-xl shadow-md disabled:opacity-50">{saving ? 'Saving…' : focus && byId.get(String(focus)) ? `Confirm ${byId.get(String(focus)).name} and add to stock` : 'Confirm and add to stock'}</button>
                     <p className="text-[11px] text-gray-400 mt-2 text-center">Stock changes only when you confirm.</p>
                 </section>
             </aside>
         </div>
     );
-      }
+                                                                                                                                                                 }
