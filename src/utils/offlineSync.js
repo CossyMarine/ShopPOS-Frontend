@@ -2,10 +2,15 @@
 import API from '../api/axios';
 import { getQueuedSales, deleteQueuedSale, putQueuedSale, getQueuedSaleCount } from './offlineDb';
 
+const sumLines = (items = []) => items.reduce((s, i) => s + (Number(i.lineTotal) || 0), 0);
+
 // Builds the local record for one offline sale — everything finalizeSale
 // needs on the server, captured NOW while it's still accurate, since the
 // device may not reconnect for hours.
-export function buildOfflineSale({ cart, branch, customerId, customerName, shiftId, amountPaid }) {
+export function buildOfflineSale({ cart, branch, customerId, customerName, shiftId, amountPaid, totalDue }) {
+    // CashierPage passes totalDue (cash is confirm-style, exact amount), so
+    // fall back to it, then to the cart total. Must never be NaN/0.
+    const paid = Number(amountPaid ?? totalDue) || sumLines(cart);
     return {
         clientSaleId: crypto.randomUUID(),
         items: cart.map(({ productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass, promotionName, originalPrice }) => ({
@@ -18,7 +23,7 @@ export function buildOfflineSale({ cart, branch, customerId, customerName, shift
         customerName: customerName || null,
         soldAt: new Date().toISOString(),
         shiftId,
-        cashPayment: { amountPaid: Number(amountPaid) },
+        cashPayment: { amountPaid: paid },
         queuedAt: new Date().toISOString(),
     };
 }
@@ -29,6 +34,14 @@ export async function queueOfflineSale(sale) {
 }
 
 export { getQueuedSaleCount };
+
+// Repairs sales queued by the old buggy build (amountPaid saved as NaN).
+// The server only uses this number to work out change, since the receipt
+// total is recomputed there, so the sum of the lines is a safe stand-in.
+const withValidPayment = (s) => {
+    if (Number(s.cashPayment?.amountPaid) > 0) return s;
+    return { ...s, cashPayment: { amountPaid: sumLines(s.items) } };
+};
 
 // Sends every queued sale to the server in one request. Each one is
 // resolved independently server-side, so a single bad line never blocks
@@ -41,7 +54,7 @@ export async function syncOfflineQueue() {
 
     // Oldest first — sells in the order they actually happened, which
     // matters for FIFO stock deduction being applied in a sane sequence.
-    const sales = [...queued].sort((a, b) => new Date(a.soldAt) - new Date(b.soldAt));
+    const sales = queued.map(withValidPayment).sort((a, b) => new Date(a.soldAt) - new Date(b.soldAt));
 
     const res = await API.post('/orders/sync-batch', { sales });
     const { results, summary } = res.data;
