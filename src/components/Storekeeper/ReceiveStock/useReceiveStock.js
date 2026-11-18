@@ -5,10 +5,12 @@ import { useAuth } from '../../../hooks/useAuth';
 import { calcDelivery, stockOf, r2 } from '../../../utils/receivingMath';
 import { money } from '../productManagementUtils';
 import { today, blankInv, unitList, qtyOf, bigKey, newLine, toWire, flagsFor } from './helpers';
+import useConfirm from '../useConfirm';
 
 export default function useReceiveStock({ products, suppliers, branch, focusReq, onDone, onCreateProduct }) {
     const { user } = useAuth();
     const key = `sk_recv_draft_${branch || 'x'}`;
+    const [confirm, confirmDialog] = useConfirm();
     const [lines, setLines] = useState([]);
     const [inv, setInv] = useState(() => blankInv(user?.fullName || ''));
     const [focus, setFocus] = useState(null);
@@ -120,9 +122,11 @@ export default function useReceiveStock({ products, suppliers, branch, focusReq,
         if (!branch) return toast.error('Select a branch first.');
         if (D.errors.length) return toast.error(D.errors[0]);
         const warns = issues.filter((i) => i.lvl === 'warn').length;
-        if (!allowDuplicate && !window.confirm(
-            `Add ${visible.length} product${visible.length > 1 ? 's' : ''} to stock?\nTotal to pay: KES ${money(T.total)}${T.saved > 0 ? `\nYou save: KES ${money(T.saved)}` : ''}${warns ? `\n\n${warns} warning(s) still open.` : ''}${hiddenCount ? `\n\n${hiddenCount} other product(s) stay in your draft.` : ''}`
-        )) return;
+        if (!allowDuplicate && !(await confirm({
+            title: `Add ${visible.length} product${visible.length > 1 ? 's' : ''} to stock?`,
+            description: `Total to pay: KES ${money(T.total)}${T.saved > 0 ? `\nYou save: KES ${money(T.saved)}` : ''}${warns ? `\n\n${warns} warning(s) still open.` : ''}${hiddenCount ? `\n\n${hiddenCount} other product(s) stay in your draft.` : ''}`,
+            confirmLabel: 'Add to stock',
+        }))) return;
         setSaving(true);
         try {
             const { data } = await API.post('/goods-receipts', {
@@ -142,7 +146,14 @@ export default function useReceiveStock({ products, suppliers, branch, focusReq,
         } catch (er) {
             const d = er.response?.data;
             if (er.response?.status === 409 && d?.details?.duplicate) {
-                if (window.confirm(`${d.message}\n\nReceive it again anyway?`)) { setSaving(false); return confirmAll(true); }
+                setSaving(false);
+                if (await confirm({
+                    title: 'Possible duplicate delivery',
+                    description: `${d.message}\n\nReceive it again anyway?`,
+                    confirmLabel: 'Receive again',
+                    tone: 'danger',
+                })) return confirmAll(true);
+                return;
             } else toast.error(d?.message || 'Failed to receive stock');
         }
         setSaving(false);
@@ -152,5 +163,6 @@ export default function useReceiveStock({ products, suppliers, branch, focusReq,
         byId, focus, setFocus, search, setSearch, showRes, setShowRes, showDel, setShowDel, saving,
         inv, setI, hits, onEnter, addLine, addLow, patchLine, removeLine,
         supplierMatch, valid, visible, hiddenCount, D, T, flags, issues, dueNote, confirmAll,
+        confirmDialog,
     };
-              }
+                }
