@@ -17,6 +17,112 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CHEMALUK" />
 
+    <!-- ============ Startup watchdog ============
+         Runs before the app. If the app crashes while loading, or shows nothing
+         after 12 seconds, this prints the error on screen instead of a blank page.
+         "Reset app cache" does not touch saved data or queued offline sales. -->
+    <script>
+      (function () {
+        var overlay = null;
+
+        function resetCache() {
+          var jobs = [];
+          if ("serviceWorker" in navigator) {
+            jobs.push(
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (r) { return r.unregister(); }));
+              })
+            );
+          }
+          if ("caches" in window) {
+            jobs.push(
+              caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+              })
+            );
+          }
+          Promise.all(jobs).catch(function () {}).then(function () {
+            window.location.reload();
+          });
+        }
+
+        function show(message) {
+          if (overlay) {
+            overlay.querySelector("pre").textContent += "\n" + message;
+            return;
+          }
+          overlay = document.createElement("div");
+          overlay.style.cssText =
+            "position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;" +
+            "background:#fff7ed;padding:16px;overflow:auto;" +
+            "font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#111827";
+
+          var title = document.createElement("h2");
+          title.textContent = "The app could not start";
+          title.style.cssText = "margin:0 0 6px;font-size:18px";
+
+          var hint = document.createElement("p");
+          hint.textContent = "Please send a screenshot of this screen to support.";
+          hint.style.cssText = "margin:0 0 10px;color:#6b7280;font-size:13px";
+
+          var pre = document.createElement("pre");
+          pre.textContent = message;
+          pre.style.cssText =
+            "white-space:pre-wrap;word-break:break-word;background:#fff;" +
+            "border:1px solid #fed7aa;border-radius:8px;padding:10px;" +
+            "color:#b91c1c;font-size:11px";
+
+          var reload = document.createElement("button");
+          reload.textContent = "Reload";
+          reload.style.cssText =
+            "margin:12px 8px 0 0;padding:10px 14px;border-radius:10px;" +
+            "border:1px solid #e5e7eb;background:#fff;font-weight:600";
+          reload.onclick = function () { window.location.reload(); };
+
+          var reset = document.createElement("button");
+          reset.textContent = "Reset app cache";
+          reset.style.cssText =
+            "margin-top:12px;padding:10px 14px;border-radius:10px;border:none;" +
+            "background:#FF5722;color:#fff;font-weight:700";
+          reset.onclick = resetCache;
+
+          overlay.appendChild(title);
+          overlay.appendChild(hint);
+          overlay.appendChild(pre);
+          overlay.appendChild(reload);
+          overlay.appendChild(reset);
+          document.body.appendChild(overlay);
+        }
+
+        // Script errors, and scripts/styles that fail to load (capture phase)
+        window.addEventListener(
+          "error",
+          function (e) {
+            var t = e.target;
+            if (t && t !== window && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
+              show("Failed to load: " + (t.src || t.href));
+              return;
+            }
+            var msg = e.message || "";
+            if (msg.indexOf("ResizeObserver") !== -1) return; // harmless browser noise
+            show(
+              msg +
+                (e.filename ? "\n" + e.filename + ":" + e.lineno + ":" + e.colno : "")
+            );
+          },
+          true
+        );
+
+        // Nothing rendered after 12s
+        window.setTimeout(function () {
+          var root = document.getElementById("root");
+          if (root && !root.firstChild) {
+            show("The app did not render anything after 12 seconds.");
+          }
+        }, 12000);
+      })();
+    </script>
+
     <!-- ============ Primary SEO ============ -->
     <title>Babylon Supermarket | Fresh Groceries & Everyday Essentials</title>
     <meta
