@@ -3,6 +3,7 @@ import { Plus, Pencil, Archive, ArchiveRestore, Trash2, Truck, Phone, Mail, X } 
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import { money } from './productManagementUtils';
+import useConfirm from './useConfirm';
 
 const TERMS = ['Cash on delivery', '7 days', '14 days', '30 days', '60 days'];
 const EMPTY = { name: '', contactPerson: '', phone: '', email: '', address: '', kraPin: '', paymentTerms: 'Cash on delivery', note: '' };
@@ -51,6 +52,7 @@ export default function SuppliersManager({ suppliers, branch, canDelete, refresh
     const [modal, setModal] = useState(null); // {supplier|null}
     const [showArchived, setShowArchived] = useState(false);
     const [q, setQ] = useState('');
+    const [ask, confirmDialog] = useConfirm();
     const list = suppliers.filter((s) => (showArchived ? s.isActive === false : s.isActive !== false) && (!q.trim() || s.name.toLowerCase().includes(q.trim().toLowerCase())));
 
     const setActive = async (s, isActive) => {
@@ -58,7 +60,12 @@ export default function SuppliersManager({ suppliers, branch, canDelete, refresh
         catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
     };
     const remove = async (s) => {
-        if (!window.confirm(`Delete "${s.name}"? This can't be undone.`)) return;
+        if (!(await ask({
+            title: 'Delete supplier?',
+            description: `Delete "${s.name}"? This can't be undone.`,
+            confirmLabel: 'Delete',
+            tone: 'danger',
+        }))) return;
         try { await API.delete(`/suppliers/${s._id}`); toast.success('Supplier deleted'); refresh(); }
         catch (e) { toast.error(e.response?.data?.message || 'Failed to delete'); }
     };
@@ -96,6 +103,7 @@ export default function SuppliersManager({ suppliers, branch, canDelete, refresh
                 ))}
             </div>
             {modal && <SupplierModal supplier={modal.supplier} branch={branch} onClose={() => setModal(null)} onSaved={async () => { setModal(null); await refresh(); }} />}
+            {confirmDialog}
         </div>
     );
-}
+            }
