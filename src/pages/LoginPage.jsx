@@ -5,7 +5,7 @@ import { ShoppingCart, Leaf, Gift, Check, Star } from "lucide-react";
 import LoginForm from "../components/LoginForm";
 import RegisterForm from "../components/RegisterForm";
 import { routeForUser } from "../utils/routeForUser";
-import heroImg from "../assets/supermarket-login.png";
+import heroImg from "../Assets/supermarket-login.png";
 
 export default function LoginPage({ onAuthed }) {
   const navigate = useNavigate();
