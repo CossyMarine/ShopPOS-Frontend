@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
 import { Link } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { User, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import API from "../api/axios";
+
+const FIELD =
+  "w-full bg-stone-50 border border-stone-200 rounded-2xl pl-10 py-3 text-sm text-stone-900 font-medium placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 focus:bg-white transition-all";
+const LABEL = "block text-[11px] font-bold uppercase tracking-wider text-stone-600 mb-1.5";
 
 export default function LoginForm({ onSuccess, onSwitchToRegister }) {
   const [identifier, setIdentifier] = useState("");
@@ -26,33 +30,30 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Email / Phone Field */}
+      {/* Email / Phone */}
       <div>
-        <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 mb-1.5">
-          Email or Phone
-        </label>
+        <label className={LABEL}>Email or phone</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
-            <Mail size={16} />
+            <User size={16} />
           </div>
           <input
             type="text"
-            placeholder="e.g. jane@mail.com or 07XX XXX XXX"
+            placeholder="jane@mail.com or 07XX XXX XXX"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             required
             autoFocus
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-4 py-3 text-sm text-stone-900 font-medium placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all"
+            autoComplete="username"
+            className={`${FIELD} pr-4`}
           />
         </div>
       </div>
 
-      {/* Password Field */}
+      {/* Password */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="block text-xs font-bold uppercase tracking-wider text-stone-600">
-            Password
-          </label>
+          <label className={`${LABEL} !mb-0`}>Password</label>
           <Link
             to="/forgot-password"
             className="text-xs text-orange-500 font-bold hover:text-orange-600 transition-colors"
@@ -70,7 +71,8 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-10 pr-12 py-3 text-sm text-stone-900 font-medium placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all"
+            autoComplete="current-password"
+            className={`${FIELD} pr-12`}
           />
           <button
             type="button"
@@ -83,27 +85,41 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }) {
         </div>
       </div>
 
-      {/* Submit Button */}
+      {/* Submit */}
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-bold py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 group active:scale-[0.99]"
+        className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-2xl transition-all shadow-[0_10px_20px_-8px_rgba(249,115,22,.6)] flex items-center justify-center gap-2 group active:scale-[0.99]"
       >
-        <span>{loading ? "Signing in…" : "Sign In"}</span>
-        {!loading && <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />}
+        <span>{loading ? "Signing in…" : "Sign in"}</span>
+        {!loading && (
+          <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+        )}
       </button>
 
-      {/* Switch to Register */}
-      <p className="text-center text-xs font-semibold text-stone-500 pt-2">
-        Don't have an account?{" "}
+      <div className="flex items-center gap-3 text-[11px] uppercase tracking-wider text-stone-400">
+        <span className="flex-1 h-px bg-stone-200" />
+        or
+        <span className="flex-1 h-px bg-stone-200" />
+      </div>
+
+      <Link
+        to="/home"
+        className="block text-center text-sm font-semibold py-3 rounded-2xl border border-stone-200 text-stone-700 hover:bg-stone-50 transition"
+      >
+        Continue shopping as guest
+      </Link>
+
+      <p className="text-center text-xs font-semibold text-stone-500">
+        New here?{" "}
         <button
           type="button"
           onClick={onSwitchToRegister}
           className="text-orange-500 font-bold hover:text-orange-600 transition-colors underline underline-offset-2"
         >
-          Sign up
+          Create an account
         </button>
       </p>
     </form>
   );
-}
+          }
