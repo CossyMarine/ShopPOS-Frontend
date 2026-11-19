@@ -42,5 +42,4 @@ coverage/
 # Temp files
 *.local
 
-# Private logo
-src/Assets/logo.png
+
