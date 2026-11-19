@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingCart, Leaf, Gift, Check, Star } from "lucide-react";
 import LoginForm from "../components/LoginForm";
@@ -36,7 +36,6 @@ export default function LoginPage({ onAuthed }) {
       {/* LEFT: form panel */}
       <main className="flex-1 flex items-center justify-center px-5 py-10 relative overflow-hidden bg-white">
         <div className="absolute -top-32 -left-32 w-96 h-96 bg-orange-100/60 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 -right-24 w-96 h-96 bg-emerald-50 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative w-full max-w-md">
           {/* Brand */}
@@ -110,27 +109,40 @@ export default function LoginPage({ onAuthed }) {
       </main>
 
       {/* RIGHT: image panel — pure white fading into the image */}
-      <aside className="hidden lg:block relative w-1/2 overflow-hidden bg-stone-900">
+      <aside className="hidden lg:block relative w-[55%] -ml-px overflow-hidden bg-white">
+        {/* Blurred copy fills the space around the zoomed-out image */}
         <img
           src={heroImg}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover"
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-80"
           onError={(e) => e.currentTarget.remove()}
         />
-        {/* white -> transparent, left to right */}
+        {/* Full image, zoomed out (nothing cropped) */}
+        <img
+          src={heroImg}
+          alt="Chemalug Mugundoi Supermarket"
+          className="absolute inset-0 w-full h-full object-contain object-center"
+          onError={(e) => e.currentTarget.remove()}
+        />
+
+        {/* white -> transparent, left to right (starts exactly white = no seam) */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(to right, #ffffff 0%, rgba(255,255,255,.85) 18%, rgba(255,255,255,0) 65%)",
+              "linear-gradient(to right, #ffffff 0%, #ffffff 4%, rgba(255,255,255,.85) 20%, rgba(255,255,255,0) 60%)",
           }}
         />
-        {/* dark fade at the bottom for text */}
+
+        {/* dark bottom fade for text, masked so it never touches the left edge */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(to top, rgba(12,10,9,.85) 0%, rgba(12,10,9,0) 50%)",
+              "linear-gradient(to top, rgba(12,10,9,.8) 0%, rgba(12,10,9,0) 50%)",
+            WebkitMaskImage: "linear-gradient(to right, transparent 0%, #000 45%)",
+            maskImage: "linear-gradient(to right, transparent 0%, #000 45%)",
           }}
         />
 
@@ -173,7 +185,7 @@ export default function LoginPage({ onAuthed }) {
         <motion.div
           animate={{ y: [0, -8, 0] }}
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-24 right-10 z-10 rounded-2xl px-4 py-3 text-white text-xs font-semibold flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25"
+          className="absolute top-24 right-10 z-10 rounded-2xl px-4 py-3 text-white text-xs font-semibold flex items-center gap-2 bg-stone-900/40 backdrop-blur-md border border-white/25"
         >
           <span className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center">
             <Check size={14} />
@@ -183,7 +195,7 @@ export default function LoginPage({ onAuthed }) {
         <motion.div
           animate={{ y: [0, -8, 0] }}
           transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-          className="absolute top-[40%] right-6 z-10 rounded-2xl px-4 py-3 text-white text-xs font-semibold flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25"
+          className="absolute top-[40%] right-6 z-10 rounded-2xl px-4 py-3 text-white text-xs font-semibold flex items-center gap-2 bg-stone-900/40 backdrop-blur-md border border-white/25"
         >
           <span className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center">
             <Star size={14} />
@@ -193,4 +205,4 @@ export default function LoginPage({ onAuthed }) {
       </aside>
     </div>
   );
-}
+        }
