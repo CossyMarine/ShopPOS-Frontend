@@ -1,16 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useLocation, useSearchParams, Link } from "react-router-dom";
-import { 
-  UtensilsCrossed, 
-  ClipboardList, 
-  Receipt, 
-  TrendingUp, 
-  ArrowLeft,
-  Sparkles
-} from "lucide-react";
+import { motion } from "framer-motion";
+import { ShoppingCart, Leaf, Gift, Check, Star } from "lucide-react";
 import LoginForm from "../components/LoginForm";
 import RegisterForm from "../components/RegisterForm";
 import { routeForUser } from "../utils/routeForUser";
+import heroImg from "../assets/supermarket-login.png";
 
 export default function LoginPage({ onAuthed }) {
   const navigate = useNavigate();
@@ -30,97 +25,61 @@ export default function LoginPage({ onAuthed }) {
     }
   };
 
+  const features = [
+    { icon: ShoppingCart, label: "Easy shopping", sub: "Quick checkout" },
+    { icon: Leaf, label: "Fresh stock", sub: "Daily supplies" },
+    { icon: Gift, label: "Rewards", sub: "Earn on every buy" },
+  ];
+
   return (
-    <div className="min-h-screen bg-stone-950 flex font-sans">
-      {/* Left panel — Branding & Value Props */}
-      <div className="hidden lg:flex flex-col justify-between w-1/2 bg-stone-900 border-r border-stone-800 p-12 relative overflow-hidden">
-        {/* Subtle Ambient Glow */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-white flex font-sans">
+      {/* LEFT: form panel */}
+      <main className="flex-1 flex items-center justify-center px-5 py-10 relative overflow-hidden bg-white">
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-orange-100/60 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -right-24 w-96 h-96 bg-emerald-50 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="flex items-center gap-2.5 relative z-10">
-          <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
-            <UtensilsCrossed size={20} />
-          </div>
-          <span className="font-black text-2xl tracking-tight text-white">
-            Resto<span className="text-orange-500">POS</span>
-          </span>
-        </div>
-
-        <div className="relative z-10 my-auto py-12">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold uppercase tracking-wider mb-6">
-            <Sparkles size={12} /> Next-Gen Restaurant Management
-          </span>
-          <h2 className="text-4xl lg:text-5xl font-black text-white leading-tight mb-6 tracking-tight">
-            Your restaurant,<br />
-            <span className="text-orange-500">fully in control.</span>
-          </h2>
-          <p className="text-stone-400 text-base leading-relaxed max-w-md font-medium">
-            // Line ~58, replace the marketing copy:
-Seamlessly coordinate every register, branch, and storekeeper task—all from one lightning-fast terminal.
-          </p>
-        </div>
-
-        {/* Feature Cards Grid */}
-        <div className="grid grid-cols-3 gap-4 relative z-10">
-          {[
-            { icon: ClipboardList, label: "Live Orders", sub: "Instant Sync" },
-            { icon: Receipt, label: "E-Receipts", sub: "Fast Billing" },
-            { icon: TrendingUp, label: "Revenue", sub: "Real-time Metrics" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="bg-stone-800/60 border border-stone-700/50 backdrop-blur-xs rounded-2xl p-4 transition-all hover:border-stone-600"
-            >
-              <div className="w-8 h-8 rounded-lg bg-orange-500/10 text-orange-400 flex items-center justify-center mb-2">
-                <item.icon size={18} />
-              </div>
-              <div className="text-white text-sm font-bold">{item.label}</div>
-              <div className="text-stone-400 text-[11px] font-medium">{item.sub}</div>
+        <div className="relative w-full max-w-md">
+          {/* Brand */}
+          <div className="flex items-center justify-center lg:justify-start gap-3 mb-6">
+            <div className="w-11 h-11 rounded-xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-200">
+              <ShoppingCart size={22} />
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right panel — Form Container */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 relative">
-        {/* Mobile Header Branding */}
-        <div className="lg:hidden flex items-center gap-2.5 mb-8">
-          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center text-white shadow-md">
-            <UtensilsCrossed size={18} />
+            <div className="leading-tight">
+              <div className="text-xl font-extrabold tracking-tight text-stone-900">
+                Chemalug <span className="text-orange-500">Mugundoi</span>
+              </div>
+              <div className="text-[11px] font-bold uppercase tracking-[.25em] text-stone-400">
+                Supermarket
+              </div>
+            </div>
           </div>
-          <span className="font-black text-2xl text-white tracking-tight">
-            Resto<span className="text-orange-500">POS</span>
-          </span>
-        </div>
 
-        <div className="w-full max-w-sm">
-          {/* Section Heading */}
+          {/* Heading */}
           <div className="mb-6 text-center lg:text-left">
-            <h1 className="text-2xl lg:text-3xl font-black text-white mb-2 tracking-tight">
-              {tab === "login" ? "Welcome back" : "Create an account"}
+            <h1 className="text-3xl font-extrabold tracking-tight text-stone-900">
+              {tab === "login" ? "Welcome back" : "Create your account"}
             </h1>
-            <p className="text-stone-400 text-sm font-medium">
+            <p className="text-sm text-stone-500 mt-1.5">
               {tab === "login"
-                ? "Sign in — staff and customer accounts both work here."
-                : "Sign up to start tracking orders and earning rewards."}
+                ? "Sign in to continue."
+                : "Shop faster, track orders and earn rewards on every purchase."}
             </p>
           </div>
 
-          {/* Form Card */}
-          <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-stone-100">
-            {/* Tab Selector */}
-            <div className="flex border-b border-stone-100 bg-stone-50/50 p-1">
+          {/* Card */}
+          <div className="bg-white rounded-3xl p-2 shadow-[0_30px_60px_-20px_rgba(28,25,23,.25)] border border-stone-100">
+            <div className="flex bg-stone-100 rounded-2xl p-1">
               {[
-                { id: "login", label: "Log In" },
-                { id: "register", label: "Sign Up" },
+                { id: "login", label: "Log in" },
+                { id: "register", label: "Sign up" },
               ].map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => setTab(t.id)}
-                  className={`flex-1 py-3 text-xs font-black uppercase tracking-wider transition-all rounded-2xl ${
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider transition ${
                     tab === t.id
-                      ? "bg-white text-orange-600 shadow-xs"
+                      ? "bg-white text-orange-600 shadow-sm"
                       : "text-stone-400 hover:text-stone-600"
                   }`}
                 >
@@ -129,40 +88,109 @@ Seamlessly coordinate every register, branch, and storekeeper task—all from on
               ))}
             </div>
 
-            {/* Active Form Body */}
-            <div className="p-6">
+            <div className="p-5">
               {tab === "login" ? (
                 <LoginForm
                   onSuccess={handleAuthSuccess}
                   onSwitchToRegister={() => setTab("register")}
                 />
               ) : (
-                <RegisterForm onSuccess={handleAuthSuccess} />
+                <RegisterForm
+                  onSuccess={handleAuthSuccess}
+                  onSwitchToLogin={() => setTab("login")}
+                />
               )}
             </div>
           </div>
 
-          {/* Footer Direct Nav Actions */}
-          <div className="mt-6 text-center space-y-3">
-            <p className="text-xs font-semibold text-stone-400">
-              Here to order food instead?{" "}
-              <Link
-                to="/home"
-                className="text-orange-400 font-bold hover:text-orange-300 transition-colors underline underline-offset-2"
-              >
-                Go to customer menu
-              </Link>
+          <p className="text-center text-[11px] text-stone-400 mt-5">
+            Secure session. Your sign-in is stored in a protected cookie.
+          </p>
+        </div>
+      </main>
+
+      {/* RIGHT: image panel — pure white fading into the image */}
+      <aside className="hidden lg:block relative w-1/2 overflow-hidden bg-stone-900">
+        <img
+          src={heroImg}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={(e) => e.currentTarget.remove()}
+        />
+        {/* white -> transparent, left to right */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to right, #ffffff 0%, rgba(255,255,255,.85) 18%, rgba(255,255,255,0) 65%)",
+          }}
+        />
+        {/* dark fade at the bottom for text */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(12,10,9,.85) 0%, rgba(12,10,9,0) 50%)",
+          }}
+        />
+
+        <div className="relative z-10 h-full flex flex-col justify-end p-12 pl-24 text-white">
+          <div className="max-w-md ml-auto">
+            <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/25 mb-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Fresh every day
+            </span>
+            <h2 className="text-4xl font-extrabold leading-[1.1] tracking-tight">
+              Everything you need,
+              <br />
+              <span className="text-orange-300">under one roof.</span>
+            </h2>
+            <p className="mt-3 text-white/85 text-sm leading-relaxed">
+              Shop faster, track your orders and earn cashback on every purchase at
+              Chemalug Mugundoi Supermarket.
             </p>
 
-            <button
-              onClick={() => navigate("/home")}
-              className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-stone-500 hover:text-stone-300 transition-colors py-1"
-            >
-              <ArrowLeft size={14} /> Back to main home
-            </button>
+            <div className="mt-6 grid grid-cols-3 gap-3">
+              {features.map((f) => (
+                <div
+                  key={f.label}
+                  className="rounded-2xl p-3.5 bg-white/15 backdrop-blur-md border border-white/25"
+                >
+                  <f.icon size={20} />
+                  <div className="text-sm font-semibold mt-1.5">{f.label}</div>
+                  <div className="text-[11px] text-white/75">{f.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-6 text-xs text-white/60">
+              © {new Date().getFullYear()} Chemalug Mugundoi Supermarket
+            </p>
           </div>
         </div>
-      </div>
+
+        {/* Floating chips */}
+        <motion.div
+          animate={{ y: [0, -8, 0] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-24 right-10 z-10 rounded-2xl px-4 py-3 text-white text-xs font-semibold flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25"
+        >
+          <span className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center">
+            <Check size={14} />
+          </span>
+          Order paid
+        </motion.div>
+        <motion.div
+          animate={{ y: [0, -8, 0] }}
+          transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+          className="absolute top-[40%] right-6 z-10 rounded-2xl px-4 py-3 text-white text-xs font-semibold flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25"
+        >
+          <span className="w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center">
+            <Star size={14} />
+          </span>
+          Cashback added
+        </motion.div>
+      </aside>
     </div>
   );
 }
