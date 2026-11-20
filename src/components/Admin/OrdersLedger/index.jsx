@@ -164,12 +164,18 @@ export default function OrdersLedger({ branch } = {}) {
         ? pendingOnline
         : allReceipts;
 
+    const isShifts = tab === 'shifts';
+
     return (
         <div className="space-y-8 bg-gray-50 text-gray-800">
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-black text-gray-800">Sales & Receipts</h2>
-                    <p className="text-sm text-gray-500">Track unpaid bills, payment history and shifts</p>
+                    <p className="text-sm text-gray-500">
+                        {isShifts
+                            ? 'Cashier shifts, sales totals and cash reconciliation'
+                            : 'Track unpaid bills, payment history and shifts'}
+                    </p>
                 </div>
                 <button
                     onClick={() => { fetchData(); fetchSummary(); fetchPendingOnline(); fetchAllReceipts(allPage); }}
@@ -180,7 +186,8 @@ export default function OrdersLedger({ branch } = {}) {
                 </button>
             </div>
 
-            <SummaryCards summary={summary} />
+            {/* Receipt summary only makes sense on receipt tabs, not Shift History */}
+            {!isShifts && <SummaryCards summary={summary} />}
 
             <TabsBar
                 tab={tab}
@@ -202,10 +209,11 @@ export default function OrdersLedger({ branch } = {}) {
                 />
             )}
 
-            {tab === 'shifts' ? (
-                <ShiftHistory branch={branch} />
+            {isShifts ? (
+                <ShiftHistory key="shifts" branch={branch} />
             ) : (
                 <OrdersTable
+                    key={tab}
                     tab={tab}
                     rows={rows}
                     loading={loading}
@@ -241,4 +249,4 @@ export default function OrdersLedger({ branch } = {}) {
             />
         </div>
     );
-                             }
+        }
