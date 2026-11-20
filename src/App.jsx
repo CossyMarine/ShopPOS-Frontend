@@ -28,10 +28,12 @@ function LoadingScreen() {
   );
 }
 
-function StaffRoute({ user, loading, allow, children }) {
+// adminAllowed: lets the Super Admin enter a role's screen (Cashier / Storekeeper)
+// while staying logged in as himself.
+function StaffRoute({ user, loading, allow, adminAllowed = false, children }) {
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  const ok = allow === "admin" ? user.isAdmin : user.role === allow;
+  const ok = allow === "admin" ? user.isAdmin : user.role === allow || (adminAllowed && user.isAdmin);
   if (!ok) return <Navigate to={routeForUser(user)} replace />;
   return children;
 }
@@ -87,7 +89,7 @@ function AppRoutes() {
         <Route
           path="/cashier"
           element={
-            <StaffRoute user={user} loading={loading} allow="cashier">
+            <StaffRoute user={user} loading={loading} allow="cashier" adminAllowed>
               <CashierPage />
             </StaffRoute>
           }
@@ -95,7 +97,7 @@ function AppRoutes() {
         <Route
           path="/storekeeper"
           element={
-            <StaffRoute user={user} loading={loading} allow="storekeeper">
+            <StaffRoute user={user} loading={loading} allow="storekeeper" adminAllowed>
               <StorekeeperPage />
             </StaffRoute>
           }
@@ -134,4 +136,4 @@ export default function App() {
       <AppRoutes />
     </AuthProvider>
   );
-        }
+}
