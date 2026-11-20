@@ -69,7 +69,7 @@ function AppRoutes() {
           element={
             loading ? (
               <LoadingScreen />
-            ) : user ? (
+            ) : user && !new URLSearchParams(window.location.search).has("display") ? (
               <Navigate to={routeForUser(user)} replace />
             ) : (
               <LoginPage onAuthed={refetch} />
@@ -143,4 +143,4 @@ export default function App() {
       <AppRoutes />
     </AuthProvider>
   );
-}
+    }
