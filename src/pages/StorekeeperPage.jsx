@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { LogOut, UserCircle2, LayoutDashboard, Store, ChevronDown } from 'lucide-react';
 import API from '../api/axios';
 import { useAuth } from '../hooks/useAuth';
+import WorkAsSwitcher from '../components/Staff/WorkAsSwitcher';
 import ProductManagement from "../components/Storekeeper/ProductManagement";
 import ClockWidget from "../components/Staff/ClockWidget";
 import LeavePanel from "../components/Staff/LeavePanel";
@@ -73,6 +74,7 @@ export default function StorekeeperPage() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <WorkAsSwitcher current="storekeeper" />
           {isAdmin && <AdminBranchPicker value={adminBranch} onChange={changeBranch} />}
 
           {isAdmin && (
@@ -105,8 +107,8 @@ export default function StorekeeperPage() {
         ) : (
           <>
             {/* Attendance and leave are for employees, not the owner */}
-            {!isAdmin && <ClockWidget />}
-            {!isAdmin && <LeavePanel />}
+            {!isAdmin && user.role === 'storekeeper' && <ClockWidget />}
+            {!isAdmin && user.role === 'storekeeper' && <LeavePanel />}
             {/* key forces a clean reload of data when the admin switches branch */}
             <ProductManagement key={adminBranch || 'own'} branch={adminBranch || undefined} />
             <StockTransfers key={`t-${adminBranch || 'own'}`} branch={adminBranch || undefined} />
