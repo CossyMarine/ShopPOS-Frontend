@@ -10,7 +10,6 @@ import Admin from "./pages/Admin";
 import CashierPage from "./pages/CashierPage";
 import StorekeeperPage from "./pages/StorekeeperPage";
 import CustomerPage from "./pages/CustomerPage";
-import PublicDisplayPage from "./pages/PublicDisplayPage";
 import OrdersPage from "./pages/OrdersPage";
 import WalletPage from "./pages/WalletPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -19,6 +18,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import VerifyResetCode from "./pages/VerifyResetCode";
 import ResetPassword from "./pages/ResetPassword";
 import StaffPage from "./pages/StaffPage";
+import CustomerDisplayPage from "./pages/CustomerDisplayPage";
 
 function LoadingScreen() {
   return (
@@ -61,7 +61,8 @@ function AppRoutes() {
         <Route path="/verify-reset-code" element={<VerifyResetCode />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        <Route path="/display/:branchId/:registerId" element={<PublicDisplayPage />} />
+        <Route path="/display" element={<CustomerDisplayPage />} />
+
 
         <Route
           path="/login"
