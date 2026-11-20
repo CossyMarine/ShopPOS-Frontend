@@ -22,8 +22,9 @@ import StaffPage from "./pages/StaffPage";
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 text-gray-400 text-sm">
-      Loading…
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-orange-50 via-white to-orange-100">
+      <div className="h-12 w-12 animate-spin rounded-full border-4 border-orange-200 border-t-orange-500" />
+      <p className="text-sm font-semibold text-gray-600">Loading…</p>
     </div>
   );
 }
