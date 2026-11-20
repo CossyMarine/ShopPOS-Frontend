@@ -9,6 +9,7 @@ import { BranchProvider, useBranch } from '../context/BranchContext';
 import API from '../api/axios';
 import AdminSidebar, { ADMIN_NAV_ITEMS } from '../components/Admin/AdminSidebar';
 import BranchSelector from '../components/Admin/BranchSelector';
+import ViewSwitcher from '../components/Admin/ViewSwitcher';
 import DashboardOverview from '../components/Admin/DashboardOverview';
 import Reminders from '../components/Admin/Reminders';
 import ProductManagement from '../components/Storekeeper/ProductManagement';
@@ -117,7 +118,12 @@ function AdminInner() {
                 pendingPaymentsCount={pendingPaymentsCount}
                 navItems={navItems}
                 title={user?.isAdmin ? 'Super Admin' : 'Branch Manager'}
-                extra={<BranchSelector />}
+                extra={
+                    <div className="space-y-2">
+                        <BranchSelector />
+                        {user?.isAdmin && <ViewSwitcher />}
+                    </div>
+                }
                 isOpen={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
             />
