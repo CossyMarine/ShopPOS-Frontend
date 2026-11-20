@@ -3,13 +3,17 @@ import { toast } from 'react-toastify';
 import { X, Banknote, Smartphone, Landmark, Layers, Gift, CheckCircle2, Printer } from 'lucide-react';
 import API from '../../api/axios';
 import useConfirm from '../Storekeeper/useConfirm';
+import PrintReceipt from '../PrintReceipt';
 
 const METHODS = [
-    { id: 'cash', label: 'Cash', icon: Banknote, color: 'gray' },
-    { id: 'till', label: 'Till', icon: Landmark, color: 'blue' },
-    { id: 'both', label: 'Both', icon: Layers, color: 'purple' },
-    { id: 'prompt', label: 'M-Pesa Prompt', icon: Smartphone, color: 'green' },
+    { id: 'cash', label: 'Cash', icon: Banknote },
+    { id: 'till', label: 'Till', icon: Landmark },
+    { id: 'both', label: 'Both', icon: Layers },
+    { id: 'reward', label: 'Reward', icon: Gift },
+    { id: 'prompt', label: 'M-Pesa', icon: Smartphone },
 ];
+
+const NOTES = [100, 200, 500, 1000, 2000, 5000];
 
 export default function PaymentModal({ receipt, onClose, onComplete }) {
     const [method, setMethod] = useState('cash');
@@ -20,25 +24,40 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
     const [ask, confirmDialog] = useConfirm();
     const pollRef = useRef(null);
 
-    // ---- "Both" combo: cash / till / reward entered together, any mix,
-    // partial or full — mirrors RestoPOS's combo payment panel. If a
-    // balance remains after Apply (e.g. rest is going on M-Pesa), a
-    // second step opens to finish it via prompt. ----
+    // ---- Cash: amount received + live change ----
+    const [cashReceived, setCashReceived] = useState('');
+
+    // ---- Reward (stand-alone method) ----
+    const [rewardAmt, setRewardAmt] = useState('');
+    const [rewardId, setRewardId] = useState('');
+    const [rewardApplying, setRewardApplying] = useState(false);
+
+    // ---- "Both" combo: cash / till / reward together ----
     const [comboCash, setComboCash] = useState('');
     const [comboTill, setComboTill] = useState('');
     const [comboReward, setComboReward] = useState('');
     const [comboRewardIdentifier, setComboRewardIdentifier] = useState('');
     const [comboApplying, setComboApplying] = useState(false);
-    const [comboRemaining, setComboRemaining] = useState(null); // null = not applied yet
+    const [comboRemaining, setComboRemaining] = useState(null); // shared by Both + Reward
     const [comboPromptPhone, setComboPromptPhone] = useState('');
     const [comboSendingPrompt, setComboSendingPrompt] = useState(false);
 
-    // "Always ask if that customer should be rewarded" — shown after successful payment
-    const [askReward, setAskReward] = useState(false);
+    // ---- Post-payment confirm screen ----
+    const [paymentDone, setPaymentDone] = useState(false);
+    const [changeDue, setChangeDue] = useState(0);
     const [rewardIdentifier, setRewardIdentifier] = useState('');
-    const [awardingReward, setAwardingReward] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+    const [printTarget, setPrintTarget] = useState(null);
 
-    const balanceDue = receipt.totalDue - (receipt.amountPaid || 0);
+    const balanceDue = Number((receipt.totalDue - (receipt.amountPaid || 0)).toFixed(2));
+
+    const cashNum = parseFloat(cashReceived) || 0;
+    const cashChange = Number((cashNum - balanceDue).toFixed(2));
+    const cashValid = cashNum > 0 && cashChange >= 0; // never allow a short / negative sale
+
+    const rewardNum = rewardAmt === '' ? balanceDue : parseFloat(rewardAmt) || 0;
+    const rewardAfter = Number((balanceDue - rewardNum).toFixed(2));
+    const rewardValid = rewardNum > 0 && rewardAfter >= -0.01;
 
     const comboCashNum = parseFloat(comboCash) || 0;
     const comboTillNum = parseFloat(comboTill) || 0;
@@ -48,15 +67,15 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
 
     useEffect(() => () => clearInterval(pollRef.current), []);
 
-    const finishAndAskReward = () => {
+    const finishPayment = (change = 0) => {
         setProcessing(false);
         setComboApplying(false);
         setComboSendingPrompt(false);
-        setAskReward(true);
+        setRewardApplying(false);
+        setChangeDue(change > 0 ? change : 0);
+        setPaymentDone(true);
     };
 
-    // Shared STK-push + poll, used by both the standalone Prompt method and
-    // the "finish remainder on prompt" step at the tail of Both.
     const sendMpesaPrompt = async (phoneNumber, amount, onSending) => {
         if (!phoneNumber.trim()) return toast.error("Enter the customer's M-Pesa number");
         onSending(true);
@@ -69,7 +88,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                     if (res.data.status === 'success') {
                         clearInterval(pollRef.current);
                         setStkStatus('success');
-                        finishAndAskReward();
+                        finishPayment();
                     } else if (res.data.status === 'failed') {
                         clearInterval(pollRef.current);
                         setStkStatus('failed');
@@ -85,12 +104,14 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
         }
     };
 
-    // Confirm-style — no amount entry, exact balance, no change.
+    // ---- CASH: amount received, change calculated, never negative ----
     const handleCash = async () => {
+        if (cashNum <= 0) return toast.error('Enter the cash received');
+        if (cashChange < 0) return toast.error(`Cash received is short by KES ${Math.abs(cashChange).toLocaleString()}`);
         setProcessing(true);
         try {
-            await API.patch(`/receipts/${receipt._id}/pay`, { amountPaid: balanceDue });
-            finishAndAskReward();
+            const res = await API.patch(`/receipts/${receipt._id}/pay`, { amountPaid: cashNum });
+            finishPayment(res.data.receipt?.changeGiven ?? cashChange);
         } catch (err) {
             toast.error(err.response?.data?.message || 'Payment failed');
             setProcessing(false);
@@ -101,7 +122,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
         setProcessing(true);
         try {
             await API.patch(`/receipts/${receipt._id}/pay/combo`, { tillAmount: balanceDue });
-            finishAndAskReward();
+            finishPayment();
         } catch (err) {
             toast.error(err.response?.data?.message || 'Payment failed');
             setProcessing(false);
@@ -110,7 +131,33 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
 
     const handlePrompt = () => sendMpesaPrompt(phone, balanceDue, setProcessing);
 
-    // ---- Both: apply any mix of cash / till / reward in one call ----
+    // ---- REWARD (stand-alone): redeem points, partial or full ----
+    const handleRewardPay = async () => {
+        if (!rewardValid) return toast.error(`Enter an amount between 1 and ${balanceDue.toLocaleString()}`);
+        if (!rewardId.trim()) return toast.error("Enter the customer's registered email or phone");
+        setRewardApplying(true);
+        try {
+            const res = await API.patch(`/receipts/${receipt._id}/pay/combo`, {
+                cashAmount: 0,
+                tillAmount: 0,
+                rewardAmount: Math.min(rewardNum, balanceDue),
+                rewardIdentifier: rewardId.trim(),
+            });
+            const remaining = res.data.balanceRemaining ?? 0;
+            if (remaining <= 0) {
+                finishPayment();
+            } else {
+                setComboRemaining(remaining);
+                setRewardApplying(false);
+                toast.info(`KES ${remaining.toLocaleString()} still due — finish it on M-Pesa prompt below`);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Reward payment failed');
+            setRewardApplying(false);
+        }
+    };
+
+    // ---- BOTH: any mix of cash / till / reward ----
     const handleComboApply = async () => {
         if (comboEntered <= 0) return toast.error('Enter at least one amount');
         if (comboAfterApply < -0.01) return toast.error('Combined amount cannot exceed the balance due');
@@ -127,7 +174,7 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
             });
             const remaining = res.data.balanceRemaining ?? 0;
             if (remaining <= 0) {
-                finishAndAskReward();
+                finishPayment();
             } else {
                 setComboRemaining(remaining);
                 setComboApplying(false);
@@ -141,27 +188,45 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
 
     const handleComboPrompt = () => sendMpesaPrompt(comboPromptPhone, comboRemaining, setComboSendingPrompt);
 
-    const handleAwardReward = async () => {
-        if (!rewardIdentifier.trim()) return toast.error("Enter the customer's email or phone");
-        setAwardingReward(true);
-        try {
-            await API.post('/wallet/admin/add-reward', { identifier: rewardIdentifier.trim(), amountSpent: receipt.totalDue });
-            toast.success('Reward points added');
-            onComplete();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to add reward — closing anyway');
-            onComplete();
+    // ---- CONFIRM: award points (if a customer was entered) then print directly ----
+    const handleConfirm = async () => {
+        setConfirming(true);
+
+        if (rewardIdentifier.trim()) {
+            try {
+                const res = await API.post('/wallet/admin/add-reward', {
+                    identifier: rewardIdentifier.trim(),
+                    amountSpent: receipt.totalDue,
+                });
+                toast.success(res.data?.message || 'Reward points added');
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Could not add reward points');
+            }
         }
-        setAwardingReward(false);
+
+        try {
+            // Fetch the paid receipt so the printout has the final amounts / change
+            const res = await API.get(`/receipts/${receipt._id}`);
+            setPrintTarget(res.data);
+            await new Promise((r) => setTimeout(r, 200)); // let <PrintReceipt> mount
+
+            await new Promise((resolve) => {
+                const done = () => { window.removeEventListener('afterprint', done); resolve(); };
+                window.addEventListener('afterprint', done);
+                window.print();
+                setTimeout(done, 4000); // fallback for browsers that never fire afterprint
+            });
+            API.patch(`/receipts/${receipt._id}/print`).catch(() => {});
+        } catch {
+            toast.error('Could not print the receipt — sale is still complete');
+        }
+
+        setPrintTarget(null);
+        setConfirming(false);
+        onComplete();
     };
 
-    // ---- Closing before payment: this is what actually abandons the sale.
-    // If any amount was already applied (partial cash/till/reward), the bill
-    // is no longer "fully unpaid" — the backend will reject a plain cancel
-    // and this must go through the manager-approved void flow instead, so we
-    // warn accordingly rather than silently failing. If an M-Pesa prompt is
-    // mid-flight, cancel it first so it doesn't resolve into a stray payment
-    // after the bill's been voided. ----
+    // ---- Closing before payment ----
     const handleCloseClick = async () => {
         if (receipt.amountPaid > 0) {
             toast.error('This bill already has a partial payment — use a void request to cancel it, not close.');
@@ -183,45 +248,48 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                 await API.post(`/receipts/${receipt._id}/mpesa/cancel`);
             }
         } catch {
-            // best-effort — the receipt-level cancel below still runs regardless
+            // best-effort
         }
         setClosing(false);
         onClose();
     };
 
-    // ---- Post-payment: ask if the customer should be rewarded ----
-    if (askReward) {
+    // ================= Post-payment: Confirm only =================
+    if (paymentDone) {
         return (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl max-w-xs w-full p-6 shadow-2xl border border-gray-200 text-center">
-                    <CheckCircle2 size={36} className="text-green-500 mx-auto mb-2" />
-                    <h3 className="text-base font-black text-gray-800 mb-1">Payment Complete</h3>
-                    <p className="text-xs text-gray-500 mb-4">Should this customer earn reward points?</p>
+            <>
+                <PrintReceipt receipt={printTarget} />
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-xs w-full p-6 shadow-2xl border border-gray-200 text-center">
+                        <CheckCircle2 size={36} className="text-green-500 mx-auto mb-2" />
+                        <h3 className="text-base font-black text-gray-800 mb-1">Payment Complete</h3>
 
-                    <input value={rewardIdentifier} onChange={(e) => setRewardIdentifier(e.target.value)}
-                        placeholder="Customer email or phone (optional)"
-                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3" />
+                        {changeDue > 0 && (
+                            <div className="bg-emerald-50 border border-emerald-100 rounded-xl py-2 my-3">
+                                <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Change to give</p>
+                                <p className="text-2xl font-black text-emerald-600">KES {changeDue.toLocaleString()}</p>
+                            </div>
+                        )}
 
-                    <div className="grid grid-cols-2 gap-2 mb-2">
-                        <button onClick={handleAwardReward} disabled={awardingReward}
-                            className="flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl text-xs font-bold disabled:opacity-50">
-                            <Gift size={14} /> {awardingReward ? 'Adding…' : 'Award Points'}
-                        </button>
-                        <button onClick={onComplete} className="bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-xl text-xs font-bold">
-                            Skip
+                        <input value={rewardIdentifier} onChange={(e) => setRewardIdentifier(e.target.value)}
+                            placeholder="Customer email or phone for reward points (optional)"
+                            disabled={confirming}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm my-3" />
+
+                        <button onClick={handleConfirm} disabled={confirming}
+                            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50">
+                            <Printer size={15} /> {confirming ? 'Printing…' : 'Confirm'}
                         </button>
                     </div>
-                    <button onClick={() => toast.info('Printing receipt…')} className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 mt-2">
-                        <Printer size={13} /> Print Receipt
-                    </button>
                 </div>
-            </div>
+            </>
         );
     }
 
+    // ================= Payment screen =================
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 max-h-[92vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
                     <div>
                         <h3 className="text-base font-black text-gray-800">{receipt.billId}</h3>
@@ -237,28 +305,81 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                     <button onClick={handleCloseClick} disabled={closing} className="text-gray-400 hover:text-gray-600 disabled:opacity-50"><X size={18} /></button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                    {METHODS.map((m) => (
-                        <button key={m.id} onClick={() => setMethod(m.id)}
-                            className={`p-2.5 rounded-xl border-2 flex flex-col items-center gap-1 text-xs font-bold transition ${
-                                method === m.id ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-500'
-                            }`}>
-                            <m.icon size={18} /> {m.label}
-                        </button>
-                    ))}
-                </div>
+                {/* Method tabs are hidden once a partial amount is applied and only the M-Pesa remainder is left */}
+                {comboRemaining === null && (
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                        {METHODS.map((m) => (
+                            <button key={m.id} onClick={() => setMethod(m.id)}
+                                className={`p-2.5 rounded-xl border-2 flex flex-col items-center gap-1 text-xs font-bold transition ${
+                                    method === m.id ? 'border-orange-500 bg-orange-50 text-orange-600' : 'border-gray-200 text-gray-500'
+                                }`}>
+                                <m.icon size={18} /> {m.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
-                {method === 'cash' && (
+                {/* Remainder step — shared by Both and Reward */}
+                {comboRemaining !== null && (
                     <div className="space-y-3">
-                        <p className="text-xs text-gray-500 text-center">Confirm cash received in hand for this bill.</p>
-                        <button onClick={handleCash} disabled={processing}
+                        <p className="text-xs text-gray-500 text-center">
+                            KES {comboRemaining.toLocaleString()} still due — finish it on M-Pesa prompt
+                        </p>
+                        <input value={comboPromptPhone} onChange={(e) => setComboPromptPhone(e.target.value)} placeholder="254712345678"
+                            disabled={stkStatus === 'pending'}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono font-bold text-center disabled:opacity-60" />
+                        <button onClick={handleComboPrompt} disabled={comboSendingPrompt}
+                            className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50">
+                            {stkStatus === 'pending' ? 'Waiting for customer PIN…' : `Send KES ${comboRemaining.toLocaleString()}`}
+                        </button>
+                    </div>
+                )}
+
+                {/* CASH */}
+                {comboRemaining === null && method === 'cash' && (
+                    <div className="space-y-3">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1 block">Cash received</label>
+                            <input type="number" inputMode="decimal" min="0" autoFocus
+                                value={cashReceived}
+                                onChange={(e) => setCashReceived(e.target.value.startsWith('-') ? '' : e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && cashValid && !processing) handleCash(); }}
+                                placeholder={String(balanceDue)}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-3 text-lg font-black text-center" />
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 justify-center">
+                            <button type="button" onClick={() => setCashReceived(String(balanceDue))}
+                                className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-600">
+                                Exact
+                            </button>
+                            {NOTES.filter((n) => n >= balanceDue).slice(0, 3).map((n) => (
+                                <button key={n} type="button" onClick={() => setCashReceived(String(n))}
+                                    className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-600">
+                                    {n.toLocaleString()}
+                                </button>
+                            ))}
+                        </div>
+
+                        <p className={`text-sm font-black text-center ${
+                            cashNum <= 0 ? 'text-gray-400' : cashChange < 0 ? 'text-red-500' : 'text-emerald-600'
+                        }`}>
+                            {cashNum <= 0
+                                ? 'Enter the amount the customer gave'
+                                : cashChange < 0
+                                    ? `Short by KES ${Math.abs(cashChange).toLocaleString()}`
+                                    : `Change: KES ${cashChange.toLocaleString()}`}
+                        </p>
+
+                        <button onClick={handleCash} disabled={processing || !cashValid}
                             className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50">
                             {processing ? 'Processing…' : `Confirm Cash Payment · KES ${balanceDue.toLocaleString()}`}
                         </button>
                     </div>
                 )}
 
-                {method === 'till' && (
+                {/* TILL */}
+                {comboRemaining === null && method === 'till' && (
                     <div className="space-y-3">
                         <p className="text-xs text-gray-500">Confirm the customer has already paid to the till/paybill in person.</p>
                         <button onClick={handleTill} disabled={processing}
@@ -268,58 +389,74 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                     </div>
                 )}
 
-                {method === 'both' && (
-                    comboRemaining === null ? (
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1 block">Cash</label>
-                                    <input type="number" value={comboCash} onChange={(e) => setComboCash(e.target.value)} placeholder="0"
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-center" />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1 block">Till</label>
-                                    <input type="number" value={comboTill} onChange={(e) => setComboTill(e.target.value)} placeholder="0"
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-center" />
-                                </div>
-                            </div>
-
-                            <div className="border border-purple-100 bg-purple-50/50 rounded-xl p-2.5 space-y-2">
-                                <label className="text-[10px] font-bold text-purple-700 uppercase tracking-wide block">Reward Points (KES value)</label>
-                                <input type="number" value={comboReward} onChange={(e) => setComboReward(e.target.value)} placeholder="0"
-                                    className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-sm font-bold text-center" />
-                                <input value={comboRewardIdentifier} onChange={(e) => setComboRewardIdentifier(e.target.value)} placeholder="Customer email or phone"
-                                    className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs" />
-                            </div>
-
-                            <p className={`text-xs font-bold text-center ${comboAfterApply < 0 ? 'text-red-500' : comboAfterApply === 0 ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                {comboAfterApply < 0
-                                    ? `Over by KES ${Math.abs(comboAfterApply).toLocaleString()}`
-                                    : `Remaining after this: KES ${comboAfterApply.toLocaleString()}`}
-                            </p>
-
-                            <button onClick={handleComboApply} disabled={comboApplying || comboEntered <= 0 || comboAfterApply < -0.01}
-                                className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50">
-                                {comboApplying ? 'Applying…' : 'Apply'}
-                            </button>
+                {/* REWARD */}
+                {comboRemaining === null && method === 'reward' && (
+                    <div className="space-y-3">
+                        <div className="border border-purple-100 bg-purple-50/50 rounded-xl p-2.5 space-y-2">
+                            <label className="text-[10px] font-bold text-purple-700 uppercase tracking-wide block">
+                                Reward amount (KES value) — partial or full
+                            </label>
+                            <input type="number" inputMode="decimal" min="0" value={rewardAmt}
+                                onChange={(e) => setRewardAmt(e.target.value.startsWith('-') ? '' : e.target.value)}
+                                placeholder={String(balanceDue)}
+                                className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-sm font-bold text-center" />
+                            <input value={rewardId} onChange={(e) => setRewardId(e.target.value)}
+                                placeholder="Customer registered email or phone"
+                                className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs" />
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            <p className="text-xs text-gray-500 text-center">
-                                KES {comboRemaining.toLocaleString()} still due — finish it on M-Pesa prompt
-                            </p>
-                            <input value={comboPromptPhone} onChange={(e) => setComboPromptPhone(e.target.value)} placeholder="254712345678"
-                                disabled={stkStatus === 'pending'}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono font-bold text-center disabled:opacity-60" />
-                            <button onClick={handleComboPrompt} disabled={comboSendingPrompt}
-                                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50">
-                                {stkStatus === 'pending' ? 'Waiting for customer PIN…' : `Send KES ${comboRemaining.toLocaleString()}`}
-                            </button>
-                        </div>
-                    )
+
+                        <p className={`text-xs font-bold text-center ${rewardAfter < -0.01 ? 'text-red-500' : rewardAfter === 0 ? 'text-emerald-600' : 'text-gray-500'}`}>
+                            {rewardAfter < -0.01
+                                ? `Over by KES ${Math.abs(rewardAfter).toLocaleString()}`
+                                : `Remaining after this: KES ${Math.max(rewardAfter, 0).toLocaleString()}`}
+                        </p>
+
+                        <button onClick={handleRewardPay} disabled={rewardApplying || !rewardValid}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50">
+                            {rewardApplying ? 'Applying…' : `Pay with Reward · KES ${Math.min(rewardNum, balanceDue).toLocaleString()}`}
+                        </button>
+                    </div>
                 )}
 
-                {method === 'prompt' && (
+                {/* BOTH */}
+                {comboRemaining === null && method === 'both' && (
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1 block">Cash</label>
+                                <input type="number" min="0" value={comboCash} onChange={(e) => setComboCash(e.target.value)} placeholder="0"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-center" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1 block">Till</label>
+                                <input type="number" min="0" value={comboTill} onChange={(e) => setComboTill(e.target.value)} placeholder="0"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold text-center" />
+                            </div>
+                        </div>
+
+                        <div className="border border-purple-100 bg-purple-50/50 rounded-xl p-2.5 space-y-2">
+                            <label className="text-[10px] font-bold text-purple-700 uppercase tracking-wide block">Reward Points (KES value)</label>
+                            <input type="number" min="0" value={comboReward} onChange={(e) => setComboReward(e.target.value)} placeholder="0"
+                                className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-sm font-bold text-center" />
+                            <input value={comboRewardIdentifier} onChange={(e) => setComboRewardIdentifier(e.target.value)} placeholder="Customer email or phone"
+                                className="w-full bg-white border border-purple-200 rounded-lg px-3 py-2 text-xs" />
+                        </div>
+
+                        <p className={`text-xs font-bold text-center ${comboAfterApply < 0 ? 'text-red-500' : comboAfterApply === 0 ? 'text-emerald-600' : 'text-gray-500'}`}>
+                            {comboAfterApply < 0
+                                ? `Over by KES ${Math.abs(comboAfterApply).toLocaleString()}`
+                                : `Remaining after this: KES ${comboAfterApply.toLocaleString()}`}
+                        </p>
+
+                        <button onClick={handleComboApply} disabled={comboApplying || comboEntered <= 0 || comboAfterApply < -0.01}
+                            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl text-sm font-extrabold disabled:opacity-50">
+                            {comboApplying ? 'Applying…' : 'Apply'}
+                        </button>
+                    </div>
+                )}
+
+                {/* M-PESA PROMPT */}
+                {comboRemaining === null && method === 'prompt' && (
                     <div className="space-y-3">
                         <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="254712345678"
                             disabled={stkStatus === 'pending'}
@@ -335,4 +472,4 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
             {confirmDialog}
         </div>
     );
-}
+        }
