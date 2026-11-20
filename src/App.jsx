@@ -33,7 +33,12 @@ function LoadingScreen() {
 function StaffRoute({ user, loading, allow, adminAllowed = false, children }) {
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  const ok = allow === "admin" ? user.isAdmin : user.role === allow || (adminAllowed && user.isAdmin);
+  const ok =
+    allow === "admin"
+      ? user.isAdmin
+      : user.role === allow ||
+        (user.extraRoles || []).includes(allow) ||
+        (adminAllowed && user.isAdmin);
   if (!ok) return <Navigate to={routeForUser(user)} replace />;
   return children;
 }
