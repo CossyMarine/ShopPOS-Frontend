@@ -26,6 +26,9 @@ export default function ComboPayModal({ receipt, onClose, onPaid }) {
         prompt: p.handleSendStk,
     }[p.paymentMethod];
 
+    // totalDue = what the customer owes (VAT included); subtotal is net-of-VAT.
+    const totalOwed = receipt ? (receipt.totalDue ?? receipt.subtotal) : 0;
+
     return (
         <>
             {/* Rendered unconditionally so it survives the modal below closing —
@@ -48,7 +51,7 @@ export default function ComboPayModal({ receipt, onClose, onPaid }) {
                         </div>
                         {receipt.amountPaid > 0 && (
                             <p className="text-xs text-gray-400 mb-6">
-                                Balance due · KES {receipt.amountPaid.toLocaleString()} already paid of KES {receipt.subtotal.toLocaleString()}
+                                Balance due · KES {receipt.amountPaid.toLocaleString()} already paid of KES {totalOwed.toLocaleString()}
                             </p>
                         )}
                         {!receipt.amountPaid && <div className="mb-6" />}
