@@ -44,13 +44,13 @@ export default function PrintReceipt({ receipt }) {
             ) : (
                 <p className="font-bold">TOTAL                    KES {receipt.totalDue}</p>
             )}
-            {receipt.amountPaid && (
-                <>
-                    <p>Amount Paid              KES {receipt.amountPaid}</p>
-                    <p>Change                   KES {receipt.changeGiven}</p>
-                    <p>Payment: {receipt.paymentMethod}</p>
-                </>
-            )}
+            {receipt.amountPaid > 0 && (
+    <>
+        <p>Amount Paid              KES {Number((receipt.amountPaid + (receipt.changeGiven || 0)).toFixed(2))}</p>
+        <p>Change                   KES {receipt.changeGiven || 0}</p>
+        <p>Payment: {receipt.paymentMethod}</p>
+    </>
+)}
             {receipt.rewardPointsEarned > 0 && (
                 <p>Points Earned            {receipt.rewardPointsEarned}</p>
             )}
