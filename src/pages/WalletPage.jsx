@@ -355,7 +355,9 @@ export default function WalletPage() {
             <p className="p-4 text-sm text-stone-400">You're all settled up — nothing owing.</p>
           )}
           {wallet?.bills.map((b) => {
-            const balanceDue = Number((b.subtotal - (b.amountPaid || 0)).toFixed(2));
+            // totalDue = what the customer owes (VAT included); subtotal is net-of-VAT.
+            const totalDue = b.totalDue ?? b.subtotal;
+            const balanceDue = Number((totalDue - (b.amountPaid || 0)).toFixed(2));
             const hasPending = (b.pendingManualPayments?.length || 0) > 0;
             return (
               <div key={b._id} className="p-4 flex items-center justify-between text-sm">
@@ -376,6 +378,7 @@ export default function WalletPage() {
                       status: b.status,
                       items: b.items.map((i) => ({ ...i, imageUrl: null })),
                       subtotal: b.subtotal,
+                      totalDue,
                       amountPaid: b.amountPaid || 0,
                       balanceDue,
                       hasPendingManualPayment: hasPending,
@@ -429,8 +432,8 @@ export default function WalletPage() {
 
               <div className="border-t border-stone-100 pt-3 space-y-1 text-sm">
                 <div className="flex justify-between text-stone-500">
-                  <span>Subtotal</span>
-                  <span>KSh {activeBill.subtotal.toLocaleString()}</span>
+                  <span>Total</span>
+                  <span>KSh {(activeBill.totalDue ?? activeBill.subtotal).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-stone-500">
                   <span>Already paid</span>
@@ -559,4 +562,4 @@ export default function WalletPage() {
       <BottomNav />
     </div>
   );
-            }
+      }
