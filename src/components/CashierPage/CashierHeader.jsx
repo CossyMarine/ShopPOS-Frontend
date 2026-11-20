@@ -1,4 +1,4 @@
-import { Barcode, Lock, ShieldAlert, History, UserCircle2, LogOut, LayoutDashboard } from 'lucide-react';
+import { Barcode, Lock, ShieldAlert, History, UserCircle2, LogOut, LayoutDashboard, MonitorSmartphone } from 'lucide-react';
 import { formatKenyanDate, formatKenyanTime } from '../../utils/formatDate';
 import useNow from './hooks/useNow';
 import { initialsOf } from './utils';
@@ -9,6 +9,7 @@ export default function CashierHeader({
     user,
     isAdmin = false,
     onBackToAdmin,
+    onOpenDisplay,
     onOpenHistory,
     onOpenVoid,
     onGoToDashboard,
@@ -46,6 +47,12 @@ export default function CashierHeader({
                         <span className="hidden sm:inline">Admin</span>
                     </button>
                 )}
+
+                <button onClick={onOpenDisplay} title="Customer Display"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                    <MonitorSmartphone size={14} />
+                    <span className="hidden sm:inline">Display</span>
+                </button>
 
                 <button onClick={onOpenHistory} title="Bill history & voids"
                     className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
@@ -87,4 +94,4 @@ export default function CashierHeader({
             </div>
         </header>
     );
-}
+                        }
