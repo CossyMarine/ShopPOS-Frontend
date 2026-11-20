@@ -2,6 +2,7 @@ import { Barcode, Lock, ShieldAlert, History, UserCircle2, LogOut, LayoutDashboa
 import { formatKenyanDate, formatKenyanTime } from '../../utils/formatDate';
 import useNow from './hooks/useNow';
 import { initialsOf } from './utils';
+import WorkAsSwitcher from '../Staff/WorkAsSwitcher';
 
 export default function CashierHeader({
     storeName,
@@ -36,6 +37,8 @@ export default function CashierHeader({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <WorkAsSwitcher current="cashier" />
+
                 {isAdmin && (
                     <button onClick={onBackToAdmin} title="Back to Admin dashboard"
                         className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-gray-700 rounded-lg transition">
