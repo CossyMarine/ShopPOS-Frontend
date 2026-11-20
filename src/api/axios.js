@@ -28,10 +28,12 @@ API.interceptors.request.use(
 // Redirect to staff login on session expiry — but NOT for the /auth/me
 // identity check, since a 401 there just means "nobody's logged in yet",
 // which is the normal state on public pages like /home.
+// The Display's /display/me check is exempt too, so the Display can handle
+// its own 401 instead of being bounced to the staff login.
 API.interceptors.response.use(
   (res) => res,
   (error) => {
-    const isMeCheck = error.config?.url?.includes("/auth/me");
+    const isMeCheck = error.config?.url?.includes("/auth/me") || error.config?.url?.includes("/display/me");
 
     if (error.code === "ECONNABORTED" || !error.response) {
       console.warn("Network error or timeout:", error.message);
