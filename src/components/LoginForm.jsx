@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { User, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import API from "../api/axios";
 
@@ -9,6 +9,7 @@ const FIELD =
 const LABEL = "block text-[11px] font-bold uppercase tracking-wider text-stone-600 mb-1.5";
 
 export default function LoginForm({ onSuccess, onSwitchToRegister }) {
+  const navigate = useNavigate();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -19,6 +20,11 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }) {
     setLoading(true);
     try {
       const res = await API.post("/auth/login", { identifier, password });
+      if (res.data.mode === "display") {
+        toast.success("Customer Display connected");
+        navigate("/display", { replace: true });
+        return;
+      }
       toast.success(`Welcome back, ${res.data.user.fullName}`);
       onSuccess?.(res.data.user);
     } catch (err) {
@@ -122,4 +128,4 @@ export default function LoginForm({ onSuccess, onSwitchToRegister }) {
       </p>
     </form>
   );
-          }
+      }
