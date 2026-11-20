@@ -86,7 +86,10 @@ export default function useComboPayment({ receipt, onClose, onPaid }) {
 
     useEffect(() => {
         if (receipt) {
-            setRemaining(Number((receipt.subtotal - (receipt.amountPaid || 0)).toFixed(2)));
+            // totalDue = what the customer owes (VAT included); subtotal is
+            // net-of-VAT. Falls back to subtotal for pre-totalDue receipts.
+            const owed = receipt.totalDue ?? receipt.subtotal;
+            setRemaining(Number((owed - (receipt.amountPaid || 0)).toFixed(2)));
         }
         reset();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -291,4 +294,4 @@ export default function useComboPayment({ receipt, onClose, onPaid }) {
         handleCashPay, handleTillPay, handleSendStk, handleRetryMpesa,
         handleRewardPay, handleComboApply, handleComboSendPrompt,
     };
-              }
+                        }
