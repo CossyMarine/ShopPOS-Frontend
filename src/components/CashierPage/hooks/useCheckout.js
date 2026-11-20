@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import API from '../../../api/axios';
 import { buildOfflineSale, queueOfflineSale } from '../../../utils/offlineSync';
+import { postDisplayCart, postDisplayBill } from "../displayApi";
 
 export default function useCheckout({
     cart, clearCart, shift, isOnline, stockOf,
@@ -46,6 +47,7 @@ export default function useCheckout({
             // recomputes it (and the VAT/totalDue figures) from `items` itself.
             const res = await API.post('/orders', { items, subtotal: netSubtotal, branch, clientSaleId });
             setReceipt(res.data.receipt);
+            postDisplayBill(res.data.receipt._id);
             setShowPayment(true);
         } catch (err) {
             if (!err.response) {
@@ -79,7 +81,9 @@ export default function useCheckout({
         toast.success("Sale saved — will sync automatically once you're back online");
     };
 
-    const handlePaymentComplete = () => {
+    const handlePaymentComplete = async () => {
+        const id = receipt?._id;
+        await postDisplayBill(id);           // Display shows "Payment received"
         setShowPayment(false);
         setReceipt(null);
         clearCart();
@@ -97,6 +101,7 @@ export default function useCheckout({
         const r = receiptRef.current;
         setShowPayment(false);
         setReceipt(null);
+        postDisplayCart(cart); // send the Display back to the live cart
         if (!r) return;
         setCheckingOut(true); // hold the Purchase button until the restocked counts are back
         try {
@@ -107,7 +112,7 @@ export default function useCheckout({
         }
         await fetchProducts();
         setCheckingOut(false);
-    }, [fetchProducts]);
+    }, [fetchProducts, cart]);
 
     // Keep the ref in sync so the beforeunload handler below (bound once)
     // always sees the current unpaid receipt, if any.
@@ -131,4 +136,4 @@ export default function useCheckout({
         receipt, showPayment, checkingOut, showOfflinePayment, setShowOfflinePayment,
         handleCheckout, handleOfflineCashConfirm, handlePaymentComplete, handleCancelCheckout,
     };
-          }
+                }
