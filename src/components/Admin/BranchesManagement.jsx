@@ -12,6 +12,8 @@ export default function BranchesManagement() {
     const [managers, setManagers] = useState([]); // unassigned/reassignable staff for the picker
     const [assigningFor, setAssigningFor] = useState(null); // branch being assigned
     const [togglingId, setTogglingId] = useState(null);
+    const [tillDrafts, setTillDrafts] = useState({}); // { [branchId]: { tillNumber, tillName } } — unsaved edits
+    const [savingTillId, setSavingTillId] = useState(null);
 
     const fetchBranches = async () => {
         try {
@@ -74,6 +76,42 @@ export default function BranchesManagement() {
         setTogglingId(null);
     };
 
+    // ---- Branch till (tillNumber / tillName) ----
+    // Reads the unsaved draft first, then the saved value, so typing feels instant.
+    const tillValue = (b, key) => tillDrafts[b._id]?.[key] ?? b[key] ?? '';
+
+    const setTillField = (b, key, value) =>
+        setTillDrafts((prev) => ({
+            ...prev,
+            [b._id]: {
+                tillNumber: prev[b._id]?.tillNumber ?? b.tillNumber ?? '',
+                tillName: prev[b._id]?.tillName ?? b.tillName ?? '',
+                [key]: value,
+            },
+        }));
+
+    const saveTill = async (b) => {
+        const draft = tillDrafts[b._id];
+        if (!draft) return;
+        setSavingTillId(b._id);
+        try {
+            await API.put(`/branches/${b._id}`, {
+                tillNumber: draft.tillNumber,
+                tillName: draft.tillName,
+            });
+            toast.success('Branch till updated');
+            setTillDrafts((prev) => {
+                const next = { ...prev };
+                delete next[b._id];
+                return next;
+            });
+            fetchBranches();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update till');
+        }
+        setSavingTillId(null);
+    };
+
     return (
         <div className="space-y-8">
             <div>
@@ -128,6 +166,30 @@ export default function BranchesManagement() {
                             <p className="text-xs text-gray-400 mt-1">{b.address || 'No address set'}</p>
                             <p className="text-xs text-gray-500 mt-1">Tax rate: <span className="font-bold">{b.taxRate}%</span></p>
 
+                            {/* Branch till — shown on the Customer Display for this branch */}
+                            <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-[10px] font-semibold text-gray-400">Till number</label>
+                                        <input value={tillValue(b, 'tillNumber')}
+                                            onChange={(e) => setTillField(b, 'tillNumber', e.target.value)}
+                                            placeholder="e.g. 123456" className="input" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-semibold text-gray-400">Till name</label>
+                                        <input value={tillValue(b, 'tillName')}
+                                            onChange={(e) => setTillField(b, 'tillName', e.target.value)}
+                                            placeholder="e.g. Westlands Shop" className="input" />
+                                    </div>
+                                </div>
+                                {tillDrafts[b._id] && (
+                                    <button onClick={() => saveTill(b)} disabled={savingTillId === b._id}
+                                        className="w-full bg-orange-500 hover:bg-orange-600 text-white py-1.5 rounded-lg text-xs font-bold disabled:opacity-50">
+                                        {savingTillId === b._id ? 'Saving…' : 'Save till'}
+                                    </button>
+                                )}
+                            </div>
+
                             <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
                                 {assigningFor === b._id ? (
                                     <select autoFocus onChange={(e) => e.target.value && handleAssign(b._id, e.target.value)}
@@ -160,4 +222,4 @@ export default function BranchesManagement() {
             `}</style>
         </div>
     );
-}
+        }
