@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import useStoreInfo from '../hooks/useStoreInfo';
@@ -28,12 +28,15 @@ export default function CashierPage() {
     const { isOnline } = useOnlineStatus();
     const { storeName, currency } = useStoreInfo();
 
+    // Staff work in their own branch; an admin working the till uses the branch he has selected.
+    const branch = user.isAdmin ? user.selectedBranch : user.branch;
+
     const [showCloseShift, setShowCloseShift] = useState(false);
     const [showVoid, setShowVoid] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
 
     const { shift, shiftLoading, fetchShift } = useShift();
-    const { products, fetchProducts } = useProducts(user.branch);
+    const { products, fetchProducts } = useProducts(branch);
     const vatSettings = useVatSettings();
 
     const {
@@ -41,7 +44,7 @@ export default function CashierPage() {
         totalQty, vatEnabled, vatAmount, netSubtotal, totalDue,
     } = useCart({ products, isOnline, vatSettings });
 
-    useCashierSocket({ branch: user.branch, cart, onCatalogChange: fetchProducts });
+    useCashierSocket({ branch, cart, onCatalogChange: fetchProducts });
 
     const { pendingSyncCount, syncing, runSync, refreshPendingCount } = useOfflineSync({ isOnline, fetchProducts });
 
@@ -50,13 +53,16 @@ export default function CashierPage() {
         handleCheckout, handleOfflineCashConfirm, handlePaymentComplete, handleCancelCheckout,
     } = useCheckout({
         cart, clearCart, shift, isOnline, stockOf,
-        netSubtotal, totalDue, branch: user.branch, fetchProducts, refreshPendingCount,
+        netSubtotal, totalDue, branch, fetchProducts, refreshPendingCount,
     });
 
     const handleLogout = async () => {
         await logout();
         navigate('/login');
     };
+
+    // Admin has to pick a branch (in the admin dashboard) before working the till
+    if (user.isAdmin && !branch) return <Navigate to="/admin" replace />;
 
     if (shiftLoading) return <div className="h-screen flex items-center justify-center text-gray-400 text-sm">Loading…</div>;
 
@@ -77,6 +83,8 @@ export default function CashierPage() {
                 user={user}
                 onOpenHistory={() => setShowHistory(true)}
                 onOpenVoid={() => setShowVoid(true)}
+                isAdmin={user.isAdmin}
+                onBackToAdmin={() => navigate('/admin')}
                 onGoToDashboard={() => navigate('/home')}
                 onLogout={handleLogout}
                 onOpenCloseShift={() => setShowCloseShift(true)}
@@ -84,7 +92,7 @@ export default function CashierPage() {
 
             <div className="flex-1 flex overflow-hidden">
                 <CatalogPanel
-                    branch={user.branch}
+                    branch={branch}
                     products={products}
                     cart={cart}
                     isOnline={isOnline}
@@ -118,9 +126,15 @@ export default function CashierPage() {
                 onConfirm={handleOfflineCashConfirm}
             />
             <CloseShiftModal open={showCloseShift} shiftId={shift?._id} onClose={() => setShowCloseShift(false)}
-                onClosed={() => { setShowCloseShift(false); navigate('/login'); logout(); }} />
-            <VoidRequestModal open={showVoid} branch={user.branch} onClose={() => setShowVoid(false)} />
-            <HistoryModal open={showHistory} branch={user.branch} onClose={() => setShowHistory(false)} />
+                onClosed={() => {
+                    setShowCloseShift(false);
+                    // Admin goes back to his dashboard; staff are logged out as before
+                    if (user.isAdmin) { navigate('/admin'); return; }
+                    navigate('/login');
+                    logout();
+                }} />
+            <VoidRequestModal open={showVoid} branch={branch} onClose={() => setShowVoid(false)} />
+            <HistoryModal open={showHistory} branch={branch} onClose={() => setShowHistory(false)} />
         </div>
     );
-}
+                                 }
