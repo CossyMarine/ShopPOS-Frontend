@@ -20,8 +20,4 @@ export default function useCashierSocket({ branch, cart, onCatalogChange }) {
 
         return () => { clearTimeout(t); socket.disconnect(); };
     }, [branch, onCatalogChange]);
-
-    useEffect(() => {
-        socketRef.current?.emit('cart:scan', { branchId: branch, registerId: REGISTER_ID, cart });
-    }, [cart, branch]);
 }
