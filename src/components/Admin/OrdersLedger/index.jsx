@@ -11,6 +11,7 @@ import TabsBar from './TabsBar';
 import HistoryFilters from './HistoryFilters';
 import OrdersTable from './OrdersTable';
 import ComboPayModal from './ComboPayModal';
+import ShiftHistory from './ShiftHistory';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
@@ -168,7 +169,7 @@ export default function OrdersLedger({ branch } = {}) {
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-black text-gray-800">Sales & Receipts</h2>
-                    <p className="text-sm text-gray-500">Track unpaid bills and payment history</p>
+                    <p className="text-sm text-gray-500">Track unpaid bills, payment history and shifts</p>
                 </div>
                 <button
                     onClick={() => { fetchData(); fetchSummary(); fetchPendingOnline(); fetchAllReceipts(allPage); }}
@@ -201,23 +202,27 @@ export default function OrdersLedger({ branch } = {}) {
                 />
             )}
 
-            <OrdersTable
-                tab={tab}
-                rows={rows}
-                loading={loading}
-                allLoading={allLoading}
-                amountOwed={amountOwed}
-                balanceDue={balanceDue}
-                rowHighlight={rowHighlight}
-                setViewing={setViewing}
-                setSelected={setPaying}
-                setRewardPayTarget={() => {}}
-                showRewardButton={false}
-                allPage={allPage}
-                allTotalPages={allTotalPages}
-                allTotal={allTotal}
-                fetchAllReceipts={fetchAllReceipts}
-            />
+            {tab === 'shifts' ? (
+                <ShiftHistory branch={branch} />
+            ) : (
+                <OrdersTable
+                    tab={tab}
+                    rows={rows}
+                    loading={loading}
+                    allLoading={allLoading}
+                    amountOwed={amountOwed}
+                    balanceDue={balanceDue}
+                    rowHighlight={rowHighlight}
+                    setViewing={setViewing}
+                    setSelected={setPaying}
+                    setRewardPayTarget={() => {}}
+                    showRewardButton={false}
+                    allPage={allPage}
+                    allTotalPages={allTotalPages}
+                    allTotal={allTotal}
+                    fetchAllReceipts={fetchAllReceipts}
+                />
+            )}
 
             <ViewItemsModal
                 open={!!viewing}
@@ -236,4 +241,4 @@ export default function OrdersLedger({ branch } = {}) {
             />
         </div>
     );
-        }
+                             }
