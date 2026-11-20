@@ -129,7 +129,11 @@ export default function OrdersLedger({ branch } = {}) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [branch]);
 
-    const balanceDue = (r) => Number((r.subtotal - (r.amountPaid || 0)).toFixed(2));
+    // totalDue = what the customer actually owes (VAT included).
+    // subtotal is net-of-VAT, so it must not be used for balance math.
+    // Falls back to subtotal for old receipts that predate totalDue.
+    const amountOwed = (r) => r.totalDue ?? r.subtotal;
+    const balanceDue = (r) => Number((amountOwed(r) - (r.amountPaid || 0)).toFixed(2));
 
     const rowHighlight = (status) => {
         if (status === 'paid') return 'bg-emerald-50/40 hover:bg-emerald-50/70';
@@ -202,6 +206,7 @@ export default function OrdersLedger({ branch } = {}) {
                 rows={rows}
                 loading={loading}
                 allLoading={allLoading}
+                amountOwed={amountOwed}
                 balanceDue={balanceDue}
                 rowHighlight={rowHighlight}
                 setViewing={setViewing}
@@ -220,7 +225,7 @@ export default function OrdersLedger({ branch } = {}) {
                 title={viewing?.billId}
                 subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
                 items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
-                total={viewing?.subtotal}
+                total={viewing ? amountOwed(viewing) : undefined}
                 payment={viewing ? paymentInfo(viewing) : null}
             />
 
@@ -231,4 +236,4 @@ export default function OrdersLedger({ branch } = {}) {
             />
         </div>
     );
-            }
+        }
