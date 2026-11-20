@@ -3,12 +3,14 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import useStoreInfo from '../hooks/useStoreInfo';
+import API from '../api/axios';
 import PaymentModal from '../components/Cashier/PaymentModal';
 import OfflineCashPaymentModal from '../components/Cashier/OfflineCashPaymentModal';
 import OfflineBanner from '../components/Cashier/OfflineBanner';
 import CloseShiftModal from '../components/Cashier/CloseShiftModal';
 import VoidRequestModal from '../components/Cashier/VoidRequestModal';
 import HistoryModal from '../components/Cashier/HistoryModal';
+import DisplayPinModal from '../components/Cashier/DisplayPinModal';
 
 import ShiftGate from '../components/CashierPage/ShiftGate';
 import CashierHeader from '../components/CashierPage/CashierHeader';
@@ -21,6 +23,7 @@ import useCart from '../components/CashierPage/hooks/useCart';
 import useCashierSocket from '../components/CashierPage/hooks/useCashierSocket';
 import useOfflineSync from '../components/CashierPage/hooks/useOfflineSync';
 import useCheckout from '../components/CashierPage/hooks/useCheckout';
+import useDisplayBroadcast from '../components/CashierPage/hooks/useDisplayBroadcast';
 
 export default function CashierPage() {
     const navigate = useNavigate();
@@ -34,6 +37,7 @@ export default function CashierPage() {
     const [showCloseShift, setShowCloseShift] = useState(false);
     const [showVoid, setShowVoid] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [showDisplay, setShowDisplay] = useState(false);
 
     const { shift, shiftLoading, fetchShift } = useShift();
     const { products, fetchProducts } = useProducts(branch);
@@ -43,6 +47,8 @@ export default function CashierPage() {
         cart, stockOf, addToCart, updateQty, removeItem, clearCart,
         totalQty, vatEnabled, vatAmount, netSubtotal, totalDue,
     } = useCart({ products, isOnline, vatSettings });
+
+    useDisplayBroadcast(cart);
 
     useCashierSocket({ branch, cart, onCatalogChange: fetchProducts });
 
@@ -57,6 +63,7 @@ export default function CashierPage() {
     });
 
     const handleLogout = async () => {
+        await API.post('/display/cart', { items: [] }).catch(() => {}); // Display goes back to Welcome, stays signed in
         await logout();
         navigate('/login');
     };
@@ -81,6 +88,7 @@ export default function CashierPage() {
             <CashierHeader
                 storeName={storeName}
                 user={user}
+                onOpenDisplay={() => setShowDisplay(true)}
                 onOpenHistory={() => setShowHistory(true)}
                 onOpenVoid={() => setShowVoid(true)}
                 isAdmin={user.isAdmin}
@@ -135,6 +143,7 @@ export default function CashierPage() {
                 }} />
             <VoidRequestModal open={showVoid} branch={branch} onClose={() => setShowVoid(false)} />
             <HistoryModal open={showHistory} branch={branch} onClose={() => setShowHistory(false)} />
+            {showDisplay && <DisplayPinModal onClose={() => setShowDisplay(false)} />}
         </div>
     );
-                                 }
+        }
