@@ -69,47 +69,62 @@ export default function PWAPrompt() {
 
   if (!needRefresh && !installEvent && !showOfflineReady) return null;
 
+  const card =
+    "flex items-center gap-4 rounded-2xl border border-orange-200 bg-white px-5 py-4 text-gray-900 shadow-2xl";
+  const iconWrap =
+    "flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600";
+  const primaryBtn =
+    "rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-orange-600 active:scale-95 transition";
+  const closeBtn =
+    "rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition";
+
   return (
     <div
-      className="fixed left-4 right-4 z-[9999] mx-auto flex max-w-md flex-col gap-2"
-      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}
+      className="fixed left-4 right-4 z-[9999] mx-auto flex max-w-xl flex-col gap-3"
+      style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
     >
       {needRefresh && (
-        <div className="flex items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-sm text-white shadow-lg">
-          <RefreshCw size={16} className="shrink-0 text-orange-400" />
-          <span className="flex-1">A new version is ready.</span>
-          <button
-            onClick={() => updateServiceWorker(true)}
-            className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-bold hover:bg-orange-600"
-          >
+        <div className={card}>
+          <div className={iconWrap}>
+            <RefreshCw size={24} />
+          </div>
+          <div className="flex-1">
+            <p className="text-base font-extrabold">Update available</p>
+            <p className="text-sm text-gray-500">A new version is ready.</p>
+          </div>
+          <button onClick={() => updateServiceWorker(true)} className={primaryBtn}>
             Update
           </button>
-          <button onClick={() => setNeedRefresh(false)} aria-label="Later" className="text-gray-400 hover:text-white">
-            <X size={16} />
+          <button onClick={() => setNeedRefresh(false)} aria-label="Later" className={closeBtn}>
+            <X size={20} />
           </button>
         </div>
       )}
 
       {installEvent && (
-        <div className="flex items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-sm text-white shadow-lg">
-          <Download size={16} className="shrink-0 text-orange-400" />
-          <span className="flex-1">Install CHEMALUK on this device.</span>
-          <button
-            onClick={install}
-            className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-bold hover:bg-orange-600"
-          >
+        <div className={card}>
+          <div className={iconWrap}>
+            <Download size={24} />
+          </div>
+          <div className="flex-1">
+            <p className="text-base font-extrabold">Install CHEMALUK</p>
+            <p className="text-sm text-gray-500">Add it to this device for faster access.</p>
+          </div>
+          <button onClick={install} className={primaryBtn}>
             Install
           </button>
-          <button onClick={dismissInstall} aria-label="Dismiss" className="text-gray-400 hover:text-white">
-            <X size={16} />
+          <button onClick={dismissInstall} aria-label="Dismiss" className={closeBtn}>
+            <X size={20} />
           </button>
         </div>
       )}
 
       {showOfflineReady && (
-        <div className="flex items-center gap-3 rounded-xl bg-gray-900 px-4 py-3 text-sm text-white shadow-lg">
-          <WifiOff size={16} className="shrink-0 text-orange-400" />
-          <span className="flex-1">Ready to work offline.</span>
+        <div className={card}>
+          <div className={iconWrap}>
+            <WifiOff size={24} />
+          </div>
+          <p className="flex-1 text-base font-bold">Ready to work offline.</p>
         </div>
       )}
     </div>
