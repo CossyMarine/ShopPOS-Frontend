@@ -110,7 +110,10 @@ export default function PaymentDetailsModal({ open, onClose, receipt }) {
 
     const payments = receipt.payments || [];
     const pending = receipt.pendingManualPayments || [];
-    const balanceDue = Number((receipt.subtotal - (receipt.amountPaid || 0)).toFixed(2));
+    // totalDue = what the customer owes (VAT included); subtotal is net-of-VAT.
+    // Falls back to subtotal for old receipts that predate totalDue.
+    const totalOwed = receipt.totalDue ?? receipt.subtotal;
+    const balanceDue = Number((totalOwed - (receipt.amountPaid || 0)).toFixed(2));
 
     return (
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-xs flex items-center justify-center z-50 px-4">
@@ -133,7 +136,7 @@ export default function PaymentDetailsModal({ open, onClose, receipt }) {
                     <div className="flex justify-between items-center bg-orange-50 rounded-xl p-3">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-orange-400 font-bold">Total</p>
-                            <p className="font-black text-gray-800">KES {Number(receipt.subtotal).toLocaleString()}</p>
+                            <p className="font-black text-gray-800">KES {Number(totalOwed).toLocaleString()}</p>
                         </div>
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-orange-400 font-bold">Paid</p>
@@ -191,4 +194,4 @@ export default function PaymentDetailsModal({ open, onClose, receipt }) {
             </div>
         </div>
     );
-          }
+                    }
