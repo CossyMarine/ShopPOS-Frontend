@@ -1,4 +1,4 @@
-import { Barcode, Lock, ShieldAlert, History, UserCircle2, LogOut } from 'lucide-react';
+import { Barcode, Lock, ShieldAlert, History, UserCircle2, LogOut, LayoutDashboard } from 'lucide-react';
 import { formatKenyanDate, formatKenyanTime } from '../../utils/formatDate';
 import useNow from './hooks/useNow';
 import { initialsOf } from './utils';
@@ -6,6 +6,8 @@ import { initialsOf } from './utils';
 export default function CashierHeader({
     storeName,
     user,
+    isAdmin = false,
+    onBackToAdmin,
     onOpenHistory,
     onOpenVoid,
     onGoToDashboard,
@@ -34,6 +36,14 @@ export default function CashierHeader({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {isAdmin && (
+                    <button onClick={onBackToAdmin} title="Back to Admin dashboard"
+                        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white bg-gray-900 hover:bg-gray-700 rounded-lg transition">
+                        <LayoutDashboard size={14} />
+                        <span className="hidden sm:inline">Admin</span>
+                    </button>
+                )}
+
                 <button onClick={onOpenHistory} title="Bill history & voids"
                     className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
                     <History size={14} />
@@ -58,7 +68,7 @@ export default function CashierHeader({
                     </div>
                     <div className="text-left hidden md:block">
                         <p className="text-xs font-bold text-gray-900 leading-none truncate max-w-[100px]">{user.fullName}</p>
-                        <span className="text-[10px] text-gray-500 font-medium">Shift Active</span>
+                        <span className="text-[10px] text-gray-500 font-medium">{isAdmin ? 'Admin · Shift Active' : 'Shift Active'}</span>
                     </div>
                 </div>
 
