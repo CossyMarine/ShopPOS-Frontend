@@ -26,6 +26,7 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
     const [payslipModalOpen, setPayslipModalOpen] = useState(false);
     const [savingQuickField, setSavingQuickField] = useState(false);
     const [nextPayoutDraft, setNextPayoutDraft] = useState('');
+    const [savingAccess, setSavingAccess] = useState(false);
 
     const fetchOverview = useCallback(async () => {
         setLoading(true);
@@ -82,6 +83,23 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
 
     const workLabel = user.role === 'cashier' ? 'Shifts' : 'Attendance';
 
+    // Admin lets a cashier/storekeeper also work as the other role (same login)
+    const otherRole = user.role === 'cashier' ? 'storekeeper' : user.role === 'storekeeper' ? 'cashier' : null;
+    const hasOther = !!otherRole && (user.extraRoles || []).includes(otherRole);
+    const toggleExtraRole = async () => {
+        const next = hasOther ? [] : [otherRole];
+        setSavingAccess(true);
+        try {
+            await API.patch(`/auth/users/${userId}/extra-roles`, { extraRoles: next });
+            toast.success(hasOther ? `${otherRole} access removed` : `Can now also work as ${otherRole}`);
+            fetchOverview();
+            onChanged?.();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update access');
+        }
+        setSavingAccess(false);
+    };
+
     return (
         <div className="space-y-5">
             <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-orange-500">
@@ -104,6 +122,21 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
                     {user.isActive ? 'Active' : 'Deactivated'}
                 </span>
             </div>
+
+            {otherRole && !user.isAdmin && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex items-center justify-between gap-4">
+                    <div>
+                        <p className="text-sm font-black text-gray-900">Can also work as {otherRole}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            They switch screens with the same login. Everything they do is recorded under their own account.
+                        </p>
+                    </div>
+                    <button onClick={toggleExtraRole} disabled={savingAccess} role="switch" aria-checked={hasOther}
+                        className={`relative w-11 h-6 rounded-full transition shrink-0 disabled:opacity-50 ${hasOther ? 'bg-green-500' : 'bg-gray-300'}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${hasOther ? 'translate-x-5' : ''}`} />
+                    </button>
+                </div>
+            )}
 
             {!wageProfile ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center justify-between">
