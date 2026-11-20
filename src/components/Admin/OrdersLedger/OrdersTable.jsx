@@ -6,6 +6,7 @@ export default function OrdersTable({
     rows,
     loading,
     allLoading,
+    amountOwed,
     balanceDue,
     rowHighlight,
     setViewing,
@@ -71,7 +72,7 @@ export default function OrdersTable({
 
                                     <td className="p-3 font-medium">{r.cashierName || "—"}</td>
 
-                                    <td className="p-3 font-bold text-gray-800">KES {r.subtotal.toLocaleString()}</td>
+                                    <td className="p-3 font-bold text-gray-800">KES {amountOwed(r).toLocaleString()}</td>
 
                                     <td className="p-3 font-semibold text-gray-600">KES {balanceDue(r).toLocaleString()}</td>
 
