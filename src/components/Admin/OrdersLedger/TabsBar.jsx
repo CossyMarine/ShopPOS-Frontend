@@ -8,7 +8,7 @@ export default function TabsBar({
 }) {
     return (
         <div className="flex gap-2 flex-wrap">
-            {["unpaid", "paid", "all", "pending-online"].map((t) => (
+            {["unpaid", "paid", "all", "pending-online", "shifts"].map((t) => (
                 <button
                     key={t}
                     onClick={() => onSelectTab(t)}
@@ -22,6 +22,8 @@ export default function TabsBar({
                         ? `All (${allTotal})`
                         : t === "pending-online"
                         ? "Pending Online"
+                        : t === "shifts"
+                        ? "Shift History"
                         : `${t} (${t === "unpaid" ? unpaidCount : paidCount})`}
 
                     {t === "pending-online" && pendingOnlineCount > 0 && (
