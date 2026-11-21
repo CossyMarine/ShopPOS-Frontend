@@ -86,14 +86,14 @@ export default function CustomerDisplayPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 text-gray-900 select-none antialiased">
-      {/* CONSTANT LIGHT HEADER — Logo, Store Name, and Prominent M-Pesa Till */}
-      <header className="bg-white border-b border-gray-200 px-6 py-3.5 flex items-center justify-between shrink-0 shadow-sm z-10">
+      {/* CONSTANT LIGHT HEADER — Larger Logo, Store Name, and Prominent M-Pesa Till */}
+      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm z-10">
         <div
           className="flex items-center gap-4 min-w-0 cursor-pointer"
           onDoubleClick={signOut}
           title="Double-click to sign out display"
         >
-          <div className="h-14 w-14 rounded-2xl bg-orange-50 border border-orange-200 p-1.5 flex items-center justify-center shrink-0 shadow-xs">
+          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-orange-50 border border-orange-200 p-2 flex items-center justify-center shrink-0 shadow-xs">
             <img
               src={logo}
               alt={store || "Store Logo"}
@@ -101,12 +101,12 @@ export default function CustomerDisplayPage() {
             />
           </div>
           <div className="min-w-0">
-            <h1 className="font-black text-xl sm:text-2xl text-gray-900 tracking-tight truncate">
+            <h1 className="font-black text-2xl sm:text-3xl text-gray-900 tracking-tight truncate">
               {store || "Babylon POS"}
             </h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+            <div className="flex items-center gap-2 mt-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500">
                 Customer Checkout Display
               </span>
             </div>
@@ -118,7 +118,7 @@ export default function CustomerDisplayPage() {
           <div className="flex items-center gap-4 bg-orange-50 border-2 border-orange-500/30 rounded-2xl px-5 py-2.5 shadow-xs">
             <div className="text-right">
               <div className="flex items-center justify-end gap-1.5">
-                <span className="inline-block w-2 h-2 rounded-full bg-emerald-600" />
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600" />
                 <p className="text-xs font-black uppercase tracking-widest text-orange-600">
                   M-Pesa Buy Goods Till
                 </p>
@@ -139,7 +139,7 @@ export default function CustomerDisplayPage() {
       {/* PHASE 1: IDLE WELCOME SCREEN */}
       {phase === "idle" && (
         <main className="flex-1 flex flex-col items-center justify-center p-8 bg-gradient-to-br from-orange-50/70 via-white to-orange-100/50 text-center">
-          <div className="w-28 h-28 rounded-3xl bg-white border border-orange-200 p-4 shadow-lg flex items-center justify-center mb-6">
+          <div className="w-36 h-36 rounded-3xl bg-white border border-orange-200 p-5 shadow-lg flex items-center justify-center mb-6">
             <img
               src={logo}
               alt={store || "Store Logo"}
@@ -174,13 +174,13 @@ export default function CustomerDisplayPage() {
       {/* PHASE 2: LIVE CART SCANNING */}
       {phase === "cart" && (
         <main className="flex-1 flex overflow-hidden">
-          {/* Left: High-Visibility Scanned Items */}
+          {/* Left: Large, High-Visibility Scanned Items */}
           <section className="w-7/12 bg-gray-50 border-r border-gray-200 flex flex-col overflow-hidden">
             <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
-              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">
+              <h2 className="text-sm sm:text-base font-black uppercase tracking-widest text-gray-600">
                 Scanned Items
               </h2>
-              <span className="px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-extrabold">
+              <span className="px-3.5 py-1 rounded-full bg-orange-100 text-orange-700 text-sm font-black">
                 {totals?.totalQty || cart.reduce((s, i) => s + i.quantity, 0)} Items
               </span>
             </div>
@@ -189,10 +189,10 @@ export default function CustomerDisplayPage() {
               {cart.map((i, idx) => (
                 <div
                   key={`${i.productId}-${idx}`}
-                  className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between transition-all"
+                  className="bg-white px-5 py-4 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between gap-4 transition-all"
                 >
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-14 h-14 rounded-xl bg-orange-50 border border-orange-100 overflow-hidden shrink-0 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-xl bg-orange-50 border border-orange-100 overflow-hidden shrink-0 flex items-center justify-center">
                       {i.imageUrl ? (
                         <img
                           src={i.imageUrl}
@@ -200,25 +200,26 @@ export default function CustomerDisplayPage() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <span className="text-xl font-black text-orange-500">
+                        <span className="text-2xl font-black text-orange-500">
                           {i.productName.charAt(0).toUpperCase()}
                         </span>
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-extrabold text-gray-900 truncate">
+                      <h3 className="text-lg sm:text-xl font-black text-gray-900 truncate leading-snug">
                         {i.productName}
                       </h3>
-                      <p className="text-sm font-semibold text-gray-500 mt-0.5">
-                        {fmt(i.unitPrice)} KES <span className="text-orange-600 font-bold">× {i.quantity}</span>
+                      <p className="text-sm sm:text-base font-bold text-gray-500 mt-0.5">
+                        {fmt(i.unitPrice)} KES{" "}
+                        <span className="text-orange-600 font-black">× {i.quantity}</span>
                       </p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0 pl-4">
-                    <span className="text-lg sm:text-xl font-black text-gray-900">
+                  <div className="text-right shrink-0 pl-3">
+                    <span className="text-2xl sm:text-3xl font-black text-orange-600 leading-none">
                       {fmt(i.lineTotal)}
                     </span>
-                    <span className="block text-[11px] font-bold text-gray-400 uppercase">
+                    <span className="block text-xs font-extrabold text-gray-500 uppercase mt-1">
                       KES
                     </span>
                   </div>
@@ -235,25 +236,25 @@ export default function CustomerDisplayPage() {
       {/* PHASE 3: FINAL BILL & PAYMENT */}
       {phase === "bill" && !paid && (
         <main className="flex-1 flex overflow-hidden">
-          {/* Left: Itemized Order List */}
+          {/* Left: Large Itemized Order List */}
           <section className="w-7/12 bg-gray-50 border-r border-gray-200 flex flex-col overflow-hidden">
             <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
-              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">
+              <h2 className="text-sm sm:text-base font-black uppercase tracking-widest text-gray-600">
                 Order Summary
               </h2>
-              <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-extrabold">
+              <span className="px-3.5 py-1 rounded-full bg-gray-100 text-gray-800 text-sm font-black">
                 Bill #{bill.billId}
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-2.5">
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {cart.map((i, idx) => (
                 <div
                   key={idx}
-                  className="bg-white px-4 py-3.5 rounded-xl border border-gray-200 flex items-center justify-between"
+                  className="bg-white px-5 py-4 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between gap-4"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-orange-50 border border-orange-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="w-14 h-14 rounded-xl bg-orange-50 border border-orange-100 overflow-hidden shrink-0 flex items-center justify-center">
                       {i.imageUrl ? (
                         <img
                           src={i.imageUrl}
@@ -261,23 +262,29 @@ export default function CustomerDisplayPage() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <span className="text-sm font-black text-orange-500">
+                        <span className="text-xl font-black text-orange-500">
                           {i.productName.charAt(0).toUpperCase()}
                         </span>
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm sm:text-base font-bold text-gray-900 truncate">
+                      <p className="text-base sm:text-lg font-black text-gray-900 truncate leading-snug">
                         {i.productName}
                       </p>
-                      <p className="text-xs font-semibold text-gray-500">
-                        {fmt(i.unitPrice)} × {i.quantity}
+                      <p className="text-sm font-bold text-gray-500 mt-0.5">
+                        {fmt(i.unitPrice)} KES{" "}
+                        <span className="text-orange-600 font-black">× {i.quantity}</span>
                       </p>
                     </div>
                   </div>
-                  <span className="text-base font-black text-gray-900 shrink-0 pl-3">
-                    {fmt(i.lineTotal)} KES
-                  </span>
+                  <div className="text-right shrink-0 pl-3">
+                    <span className="text-xl sm:text-2xl font-black text-gray-900">
+                      {fmt(i.lineTotal)}
+                    </span>
+                    <span className="block text-xs font-extrabold text-gray-500 uppercase">
+                      KES
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -287,7 +294,7 @@ export default function CustomerDisplayPage() {
           <section className="w-5/12 bg-white flex flex-col justify-between p-8">
             <div>
               <div className="flex items-center justify-between">
-                <span className="px-3 py-1 rounded-full bg-orange-100 text-orange-600 text-xs font-black uppercase tracking-widest">
+                <span className="px-3.5 py-1 rounded-full bg-orange-100 text-orange-600 text-xs font-black uppercase tracking-widest">
                   {bill.status === "partial" ? "Partial Payment" : "Awaiting Payment"}
                 </span>
                 <span className="text-xs font-bold text-gray-400">
@@ -306,10 +313,10 @@ export default function CustomerDisplayPage() {
               </div>
 
               {bill.status === "partial" && (
-                <div className="mt-5 p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5 text-sm">
-                  <div className="flex justify-between text-gray-600 font-medium">
+                <div className="mt-5 p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5 text-sm sm:text-base">
+                  <div className="flex justify-between text-gray-600 font-semibold">
                     <span>Original Bill Total</span>
-                    <span className="font-bold text-gray-900">{fmt(bill.totalDue)} KES</span>
+                    <span className="font-black text-gray-900">{fmt(bill.totalDue)} KES</span>
                   </div>
                   <div className="flex justify-between text-emerald-700 font-bold">
                     <span>Amount Paid</span>
@@ -378,7 +385,7 @@ function Totals({ totals, label, till }) {
           {fmt(totals.totalDue)}{" "}
           <span className="text-2xl font-extrabold text-orange-500">KES</span>
         </p>
-        <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-bold">
+        <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-base font-bold">
           <span>Total Quantity:</span>
           <span className="text-gray-900 font-black">
             {totals.totalQty} item{totals.totalQty === 1 ? "" : "s"}
