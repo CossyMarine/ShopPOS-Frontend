@@ -1,14 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { SOCKET_URL, REGISTER_ID } from '../constants';
+import { SOCKET_URL } from '../constants';
 
-// ---- Socket: broadcast the live cart to the Customer Display + join branch room ----
-export default function useCashierSocket({ branch, cart, onCatalogChange }) {
-    const socketRef = useRef(null);
-
+// ---- Socket: join the branch room and refresh the catalog when stock changes elsewhere ----
+// (The Customer Display is fed separately via useDisplayBroadcast → POST /display/cart.)
+export default function useCashierSocket({ branch, onCatalogChange }) {
     useEffect(() => {
         const socket = io(SOCKET_URL);
-        socketRef.current = socket;
         socket.emit('join_room', `branch:${branch}`);
 
         // Another register sold something, or stock changed elsewhere:
