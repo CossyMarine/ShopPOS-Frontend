@@ -25,6 +25,10 @@ import useOfflineSync from '../components/CashierPage/hooks/useOfflineSync';
 import useCheckout from '../components/CashierPage/hooks/useCheckout';
 import useDisplayBroadcast from '../components/CashierPage/hooks/useDisplayBroadcast';
 
+// Sends the Customer Display back to its Welcome screen (it stays signed in).
+// Must run BEFORE logout(), which clears the session this call needs.
+const resetDisplay = () => API.post('/display/cart', { items: [] }).catch(() => {});
+
 export default function CashierPage() {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
@@ -50,7 +54,7 @@ export default function CashierPage() {
 
     useDisplayBroadcast(cart);
 
-    useCashierSocket({ branch, cart, onCatalogChange: fetchProducts });
+    useCashierSocket({ branch, onCatalogChange: fetchProducts });
 
     const { pendingSyncCount, syncing, runSync, refreshPendingCount } = useOfflineSync({ isOnline, fetchProducts });
 
@@ -63,7 +67,7 @@ export default function CashierPage() {
     });
 
     const handleLogout = async () => {
-        await API.post('/display/cart', { items: [] }).catch(() => {}); // Display goes back to Welcome, stays signed in
+        await resetDisplay();
         await logout();
         navigate('/login');
     };
@@ -134,10 +138,11 @@ export default function CashierPage() {
                 onConfirm={handleOfflineCashConfirm}
             />
             <CloseShiftModal open={showCloseShift} shiftId={shift?._id} onClose={() => setShowCloseShift(false)}
-                onClosed={() => {
+                onClosed={async () => {
                     setShowCloseShift(false);
                     // Admin goes back to his dashboard; staff are logged out as before
                     if (user.isAdmin) { navigate('/admin'); return; }
+                    await resetDisplay();
                     navigate('/login');
                     logout();
                 }} />
@@ -146,4 +151,4 @@ export default function CashierPage() {
             {showDisplay && <DisplayPinModal onClose={() => setShowDisplay(false)} />}
         </div>
     );
-        }
+}
