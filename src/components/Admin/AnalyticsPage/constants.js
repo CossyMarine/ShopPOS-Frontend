@@ -23,3 +23,8 @@ export const EMPTY_OVERVIEW = {
 export const EMPTY_MARGIN = { categories: [], totals: {} };
 export const EMPTY_DEAD = { items: [], totalValueTiedUp: 0, thresholdDays: 30 };
 export const EMPTY_VAT = { enabled: false };
+export const EMPTY_COSTS = {
+    totals: { stockLoss: 0, pettyCash: 0, belowCostLoss: 0, belowCostLines: 0, pendingLossReports: 0 },
+    byReason: [],
+    daily: [],
+};
