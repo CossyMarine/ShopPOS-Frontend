@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import WageProfileModal from './WageProfileModal';
 import PayslipModal from './PayslipModal';
+import DisplayAccessCard from './DisplayAccessCard';
 
 const PAYMENT_METHODS = [
     { value: 'mpesa', label: 'M-Pesa' },
@@ -100,6 +101,9 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
         setSavingAccess(false);
     };
 
+    // Customer Display applies to anyone who works the till (main or extra role)
+    const isCashierCapable = !user.isAdmin && (user.role === 'cashier' || (user.extraRoles || []).includes('cashier'));
+
     return (
         <div className="space-y-5">
             <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-orange-500">
@@ -137,6 +141,9 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
                     </button>
                 </div>
             )}
+
+            {/* Customer Display: per-cashier till + Reset PIN */}
+            {isCashierCapable && <DisplayAccessCard userId={userId} />}
 
             {!wageProfile ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center justify-between">
@@ -374,7 +381,7 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
             </div>
 
             <WageProfileModal
-                user={wageModalOpen ? { id: userId, fullName: user.fullName, role: user.role} : null}
+                user={wageModalOpen ? { id: userId, fullName: user.fullName, role: user.role } : null}
                 onClose={() => setWageModalOpen(false)}
                 onSaved={() => { fetchOverview(); onChanged?.(); }}
             />
@@ -385,4 +392,4 @@ export default function StaffDetailView({ userId, onBack, onChanged }) {
             />
         </div>
     );
-                                                           }
+            }
