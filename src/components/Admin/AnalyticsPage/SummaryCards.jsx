@@ -12,13 +12,14 @@ export default function SummaryCards({ view, overview }) {
                 tone="text-blue-600" bg="bg-blue-50"
                 sub={view.vOn ? `Includes ${money(view.vatCollected)} VAT` : null}
             />
-            <StatCard label={view.profitLabel} value={money(view.profit)} icon={TrendingUp} tone="text-emerald-600" bg="bg-emerald-50" />
+            <StatCard label={view.profitLabel} value={money(view.grossProfit)} icon={TrendingUp} tone="text-emerald-600" bg="bg-emerald-50" sub="Revenue minus cost of goods" />
             <StatCard label="Salary Payments" value={money(view.salary)} icon={Users} tone="text-amber-600" bg="bg-amber-50" sub={`${salary.payoutCount} payslip(s)`} />
             <StatCard
-                label="Profit After Salary" value={money(view.kept)}
+                label="Net Result" value={money(view.kept)}
                 icon={keptOk ? TrendingUp : TrendingDown}
                 tone={keptOk ? 'text-emerald-600' : 'text-red-600'}
                 bg={keptOk ? 'bg-emerald-50' : 'bg-red-50'}
+                sub="After stock losses, petty cash and salaries"
             />
             <StatCard label="Est. Next Payroll" value={money(totals.estNextPayroll)} icon={CircleDollarSign} tone="text-indigo-600" bg="bg-indigo-50" />
             {topBranch ? (
