@@ -83,6 +83,8 @@ export function buildView(overview, vat, costs) {
         revenue, netSales, grossProfit, cost, salary, stockLoss, pettyCash,
         kept: grossProfit - stockLoss - pettyCash - salary, // the net result
         vatCollected: vOn ? vat.totals.vat : 0,
+        vatPayable: vOn ? vat.totals.payable : 0,   
+        vatRate: vOn ? vat.rate : 0,
         revenueLabel: vOn ? 'Revenue (incl. VAT)' : 'Total Revenue',
         profitLabel: vOn ? (exVat ? 'Gross Profit (excl. VAT)' : 'Gross Profit (incl. VAT)') : 'Gross Profit',
         trend: days.length > 45 ? groupByMonth(days) : days,
