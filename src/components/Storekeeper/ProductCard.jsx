@@ -7,18 +7,23 @@ const STATUS = {
     'In stock': 'bg-green-100 text-green-700', Low: 'bg-amber-100 text-amber-700', Out: 'bg-red-100 text-red-700',
 };
 
-export default function ProductCard({ p, branch, canDelete, onChanged, onReceiveStock, onReportLoss, onPrintLabel, onEdit, onArchive, onDelete }) {
+export default function ProductCard({ p, branch, canDelete, onChanged, onOpen, onReceiveStock, onReportLoss, onPrintLabel, onEdit, onArchive, onDelete }) {
     const abbr = baseAbbr(p), stock = stockOf(p), cost = avgCostPerEach(p), packs = packsOf(p);
     const status = statusOf(p), expiry = earliestExpiry(p), up = unitProfit(p), last = lastStockProfit(p);
     const lastLoss = last !== null && last < 0;
     const act = 'flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-700 hover:text-white transition';
+    const stop = (e) => e.stopPropagation();
 
     return (
-        <article className="bg-white rounded-3xl p-6 ring-1 ring-black/5 transition-all duration-300 hover:-translate-y-1.5
+        <article role="button" tabIndex={0} aria-label={`View ${p.name} details`}
+            onClick={() => onOpen?.(p)}
+            onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen?.(p); } }}
+            className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-orange bg-white rounded-3xl p-6 ring-1 ring-black/5 transition-all duration-300 hover:-translate-y-1.5
             shadow-[0_1px_2px_rgba(0,0,0,.05),0_14px_28px_-8px_rgba(0,0,0,.14),0_40px_70px_-20px_rgba(0,0,0,.22)]
             hover:shadow-[0_2px_4px_rgba(0,0,0,.06),0_22px_40px_-8px_rgba(0,0,0,.18),0_60px_90px_-20px_rgba(0,0,0,.28)]">
             <div className="flex gap-5">
-                <ProductImage product={p} branch={branch} onChanged={onChanged} />
+                {/* image tools (view / change / delete photo) must not open the details sheet */}
+                <div onClick={stop} className="shrink-0"><ProductImage product={p} branch={branch} onChanged={onChanged} /></div>
                 <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                         <h3 className="text-xl font-black text-gray-900 leading-tight break-words">{p.name}</h3>
@@ -57,7 +62,8 @@ export default function ProductCard({ p, branch, canDelete, onChanged, onReceive
             </div>
             {expiry && <p className={`mt-3 inline-block px-3 py-1 rounded-full text-xs font-extrabold ${isExpiringSoon(expiry) ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>Expires {new Date(expiry).toLocaleDateString()}</p>}
 
-            <div className="grid grid-cols-3 gap-2 mt-5">
+            {/* action buttons must not open the details sheet */}
+            <div className="grid grid-cols-3 gap-2 mt-5" onClick={stop}>
                 <button onClick={() => onReceiveStock(p)} className={`${act} hover:bg-green-600`}><PackagePlus size={14} />Receive</button>
                 <button onClick={() => onEdit(p)} className={`${act} hover:bg-brand-orange`}><Pencil size={14} />Edit</button>
                 <button onClick={() => onReportLoss(p)} className={`${act} hover:bg-red-600`}><AlertTriangle size={14} />Loss</button>
@@ -67,4 +73,4 @@ export default function ProductCard({ p, branch, canDelete, onChanged, onReceive
             </div>
         </article>
     );
-}
+            }
