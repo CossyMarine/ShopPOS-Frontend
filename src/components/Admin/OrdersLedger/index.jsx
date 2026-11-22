@@ -12,6 +12,8 @@ import HistoryFilters from './HistoryFilters';
 import OrdersTable from './OrdersTable';
 import ComboPayModal from './ComboPayModal';
 import ShiftHistory from './ShiftHistory';
+import DailySales from './DailySales';           // NEW
+import useDailySales from './useDailySales';     // NEW
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
@@ -36,6 +38,25 @@ export default function OrdersLedger({ branch } = {}) {
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
     const [summary, setSummary] = useState({ paidToday: 0, paidTodayCount: 0, unpaidToday: 0, unpaidTodayCount: 0 });
+
+    // ---- NEW: Daily Sales (period dropdown, default Last Month) ----
+    const [range, setRange] = useState('last_month');
+    const [pFrom, setPFrom] = useState('');
+    const [pTo, setPTo] = useState('');
+    const [tick, setTick] = useState(0);          // bumped by Refresh
+    const [pickedDay, setPickedDay] = useState(null);
+
+    const daily = useDailySales({ branch, range, from: pFrom, to: pTo, tick });
+
+    const changeRange = (r) => { setRange(r); setPickedDay(null); };
+
+    // Tapping a day jumps to the "All" tab filtered to that day
+    const pickDay = (d) => {
+        setPickedDay(d);
+        setDateFrom(`${d}T00:00`);
+        setDateTo(`${d}T23:59`);
+        setTab('all');
+    };
 
     const branchParams = branch ? { branch } : {};
 
@@ -115,7 +136,7 @@ export default function OrdersLedger({ branch } = {}) {
         const socket = io(SOCKET_URL);
         if (branch) socket.emit('join_room', `branch:${branch}`);
 
-        socket.on('receipt:paid', () => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); });
+        socket.on('receipt:paid', () => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); setTick((t) => t + 1); }); // NEW: tick
         socket.on('receipt:updated', () => { fetchData(); fetchPendingOnline(); fetchAllReceipts(allPage); });
         socket.on('sale:created', ({ order } = {}) => {
             fetchData();
@@ -166,6 +187,14 @@ export default function OrdersLedger({ branch } = {}) {
 
     const isShifts = tab === 'shifts';
 
+    const refreshAll = () => {
+        fetchData();
+        fetchSummary();
+        fetchPendingOnline();
+        fetchAllReceipts(allPage);
+        setTick((t) => t + 1); // NEW: reload Daily Sales too
+    };
+
     return (
         <div className="space-y-8 bg-gray-50 text-gray-800">
             <div className="flex flex-wrap justify-between items-center gap-4">
@@ -174,17 +203,26 @@ export default function OrdersLedger({ branch } = {}) {
                     <p className="text-sm text-gray-500">
                         {isShifts
                             ? 'Cashier shifts, sales totals and cash reconciliation'
-                            : 'Track unpaid bills, payment history and shifts'}
+                            : 'Daily sales, unpaid bills, payment history and shifts'}
                     </p>
                 </div>
                 <button
-                    onClick={() => { fetchData(); fetchSummary(); fetchPendingOnline(); fetchAllReceipts(allPage); }}
+                    onClick={refreshAll}
                     className="flex items-center gap-1.5 bg-white border border-gray-200 hover:border-orange-500/40 text-gray-500 hover:text-orange-500 px-3 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
                 >
-                    <RefreshCw size={14} className={loading || allLoading ? 'animate-spin' : ''} />
+                    <RefreshCw size={14} className={loading || allLoading || daily.loading ? 'animate-spin' : ''} />
                     Refresh
                 </button>
             </div>
+
+            {/* NEW: Daily Sales first (period dropdown, totals, day-by-day table) */}
+            {!isShifts && (
+                <DailySales
+                    range={range} setRange={changeRange}
+                    from={pFrom} setFrom={setPFrom} to={pTo} setTo={setPTo}
+                    data={daily} onPickDay={pickDay} selectedDay={pickedDay}
+                />
+            )}
 
             {/* Receipt summary only makes sense on receipt tabs, not Shift History */}
             {!isShifts && <SummaryCards summary={summary} />}
@@ -203,9 +241,9 @@ export default function OrdersLedger({ branch } = {}) {
                     search={search}
                     setSearch={setSearch}
                     dateFrom={dateFrom}
-                    setDateFrom={setDateFrom}
+                    setDateFrom={(v) => { setDateFrom(v); setPickedDay(null); }}
                     dateTo={dateTo}
-                    setDateTo={setDateTo}
+                    setDateTo={(v) => { setDateTo(v); setPickedDay(null); }}
                 />
             )}
 
@@ -245,8 +283,8 @@ export default function OrdersLedger({ branch } = {}) {
             <ComboPayModal
                 receipt={paying}
                 onClose={() => setPaying(null)}
-                onPaid={() => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); }}
+                onPaid={() => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); setTick((t) => t + 1); }}
             />
         </div>
     );
-        }
+                }
