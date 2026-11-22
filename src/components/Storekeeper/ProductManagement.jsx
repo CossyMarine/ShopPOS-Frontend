@@ -12,6 +12,7 @@ import LowStockBanner from './LowStockBanner';
 import UnitManager from './UnitManager';
 import ProductFilters from './ProductFilters';
 import ProductCard from './ProductCard';
+import ProductDetailsSheet from './ProductDetailsSheet';
 import ArchivedProductsModal from './ArchivedProductsModal';
 import ProductFormModal from './ProductFormModal';
 import ReceiveStock from './ReceiveStock';
@@ -45,6 +46,7 @@ export default function ProductManagement({ branch }) {
     const [supplierFilter, setSupplierFilter] = useState('');
     const [showLowStockBanner, setShowLowStockBanner] = useState(true);
     const [showArchive, setShowArchive] = useState(false);
+    const [detailsId, setDetailsId] = useState(null);    // product whose details sheet is open
 
     const [search, setSearch] = useState('');
     const [filterPackaging, setFilterPackaging] = useState('all');
@@ -66,6 +68,7 @@ export default function ProductManagement({ branch }) {
     const active = useMemo(() => products.filter((p) => p.isActive !== false), [products]);
     const archived = useMemo(() => products.filter((p) => p.isActive === false), [products]);
     const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))).sort(), [products]);
+    const detailsProduct = useMemo(() => (detailsId ? products.find((x) => x._id === detailsId) : null), [detailsId, products]);
 
     const stats = useMemo(() => {
         let bulkCount = 0, lowCount = 0, lossCount = 0, stockValue = 0, potentialProfit = 0;
@@ -98,6 +101,7 @@ export default function ProductManagement({ branch }) {
 
     const goReceive = (p, key) => {
         if (p.isActive === false) return toast.error(`${p.name} is archived. Restore it first.`);
+        setDetailsId(null);
         setFocusReq({ id: p._id, key, n: Date.now() }); setTab('receive'); window.scrollTo({ top: 0 });
     };
 
@@ -165,6 +169,7 @@ export default function ProductManagement({ branch }) {
                     {filtered.length === 0 && <div className="md:col-span-2 2xl:col-span-3 bg-white rounded-3xl p-12 text-center text-gray-400 font-bold shadow-sm">No products found</div>}
                     {filtered.map((p) => (
                         <ProductCard key={p._id} p={p} branch={effectiveBranch} canDelete={canDelete} onChanged={fetchProducts}
+                            onOpen={(x) => setDetailsId(x._id)}
                             onReceiveStock={goReceive} onReportLoss={setAdjustingFor} onPrintLabel={setLabelFor}
                             onEdit={(x) => setModal({ product: x })}
                             onArchive={(x) => setPending({ type: 'archive', item: x })}
@@ -207,6 +212,8 @@ export default function ProductManagement({ branch }) {
             {tab === 'suppliers' && <SuppliersManager suppliers={suppliers} branch={effectiveBranch} canDelete={canDelete} refresh={fetchSuppliers}
                 onViewDeliveries={(s) => { setSupplierFilter(s._id); setTab('history'); }} />}
 
+            {detailsProduct && <ProductDetailsSheet key={detailsProduct._id} product={detailsProduct} branch={effectiveBranch} onClose={() => setDetailsId(null)} />}
+
             {modal && <ProductFormModal key={modal.product?._id || 'new'} product={modal.product} initialName={modal.name} units={units} categories={categories} suppliers={suppliers}
                 branch={effectiveBranch} onClose={() => setModal(null)} onSaved={afterSave} onOpenUnitManager={() => { setModal(null); setTab('packs'); setShowUnitManager(true); }} />}
 
@@ -238,4 +245,4 @@ export default function ProductManagement({ branch }) {
             `}</style>
         </div>
     );
-        }
+                                                                                                                                                                 }
