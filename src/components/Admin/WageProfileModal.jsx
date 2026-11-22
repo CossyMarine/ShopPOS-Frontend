@@ -24,6 +24,7 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
     const [saving, setSaving] = useState(false);
     const [deductions, setDeductions] = useState([]);
     const [deductionsLoading, setDeductionsLoading] = useState(false);
+    const [orgDefaults, setOrgDefaults] = useState(null);
 
     useEffect(() => {
         if (!user) return;
@@ -38,6 +39,11 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
             } : empty))
             .catch(() => toast.error('Failed to load wage profile'))
             .finally(() => setLoading(false));
+
+        const branchId = user.branch?._id || user.branch;
+        API.get('/payroll-settings', { params: branchId ? { branch: branchId } : {} })
+            .then((res) => setOrgDefaults(res.data || null))
+            .catch(() => setOrgDefaults(null));
 
         setDeductionsLoading(true);
         API.get('/deductions')
@@ -65,6 +71,23 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
         setForm((f) => ({ ...f, selectedDeductions: isNowAll ? [] : next }));
     };
 
+    const RATE_KEYS = ['hourlyRate', 'overtimeMultiplier', 'dailyRateWeekday', 'dailyRateWeekend', 'monthlySalary', 'commissionRate'];
+
+    // Switching to a custom rate: start from the org default instead of blanks,
+    // so the salary field is pre-filled and ready to edit.
+    const switchToCustom = () => {
+        setForm((f) => {
+            const next = { ...f, useOrgDefaultRate: false };
+            if (orgDefaults) {
+                RATE_KEYS.forEach((k) => {
+                    if (!Number(f[k])) next[k] = orgDefaults[k] ?? '';
+                });
+                next.schedule = { ...(orgDefaults.schedule || {}), ...Object.fromEntries(Object.entries(f.schedule || {}).filter(([, v]) => v !== null && v !== '')) };
+            }
+            return next;
+        });
+    };
+
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -73,7 +96,9 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
             onSaved?.();
             onClose();
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to save wage profile');
+            const d = err.response?.data;
+            const detail = d?.details ? Object.entries(d.details).map(([k, v]) => `${k}: ${v}`).join(' • ') : '';
+            toast.error(detail || d?.message || 'Failed to save wage profile');
         }
         setSaving(false);
     };
@@ -113,7 +138,7 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
                                     <span className="text-[10px] text-gray-500">Off to set a custom rate &amp; schedule for {user.fullName} only</span>
                                 </div>
                                 <input type="checkbox" checked={form.useOrgDefaultRate}
-                                    onChange={(e) => setForm({ ...form, useOrgDefaultRate: e.target.checked })}
+                                    onChange={(e) => (e.target.checked ? setForm({ ...form, useOrgDefaultRate: true }) : switchToCustom())}
                                     className="w-4 h-4 accent-blue-600 shrink-0 ml-3" />
                             </label>
 
@@ -131,8 +156,23 @@ export default function WageProfileModal({ user, onClose, onSaved }) {
                                             </button>
                                         ))}
                                     </div>
+                                    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Inherited rate</span>
+                                            <span className="text-sm font-extrabold text-gray-800">
+                                                {!orgDefaults ? 'No org default set'
+                                                    : form.wageType === 'monthly' ? `${Number(orgDefaults.monthlySalary || 0).toLocaleString()} KES / month`
+                                                    : form.wageType === 'daily' ? `${Number(orgDefaults.dailyRateWeekday || 0).toLocaleString()} KES / day`
+                                                    : `${Number(orgDefaults.hourlyRate || 0).toLocaleString()} KES / hour`}
+                                            </span>
+                                        </div>
+                                        <button type="button" onClick={switchToCustom}
+                                            className="text-xs font-extrabold text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-3 py-1.5 shrink-0">
+                                            Edit salary
+                                        </button>
+                                    </div>
                                     <p className="text-[10px] text-gray-400 px-0.5 mt-1.5">
-                                        Rate and schedule are pulled from the org/branch default and update automatically if that changes.
+                                        Rate and schedule follow the org/branch default. Tap Edit salary to set one just for {user.fullName}.
                                     </p>
                                 </div>
                             ) : (
