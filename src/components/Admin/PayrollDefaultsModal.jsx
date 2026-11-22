@@ -35,7 +35,9 @@ export default function PayrollDefaultsModal({ open, onClose, branchId }) {
             toast.success('Default payroll settings saved');
             onClose();
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to save defaults');
+            const d = err.response?.data;
+            const detail = d?.details ? Object.entries(d.details).map(([k, v]) => `${k}: ${v}`).join(' • ') : '';
+            toast.error(detail || d?.message || 'Failed to save defaults');
         }
         setSaving(false);
     };
