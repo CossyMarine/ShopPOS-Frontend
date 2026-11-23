@@ -1,3 +1,5 @@
+import { lineQtyPrice } from '../utils/packLine';
+
 export default function PrintReceipt({ receipt }) {
     if (!receipt) return null;
 
@@ -24,14 +26,27 @@ export default function PrintReceipt({ receipt }) {
             <p>Item              Qty   Price   Total</p>
             <p>-------------------------------------</p>
 
-            {receipt.items?.map((item, i) => (
-                <p key={i}>
-                    {item.productName.padEnd(18).slice(0, 18)}
-                    {String(item.quantity).padStart(3)}
-                    {String(item.unitPrice).padStart(7)}
-                    {String(item.lineTotal).padStart(7)}
-                </p>
-            ))}
+            {receipt.items?.map((item, i) => {
+                const l = lineQtyPrice(item);
+                const isPack = !!item.packId;
+                // Normal line: name + numbers on one row.
+                // Pack line: name on its own row, then "Carton of 12" + numbers,
+                // so the pack label is never cut off.
+                const label = isPack
+                    ? `  ${item.packName} of ${item.packQty}`
+                    : item.productName;
+                return (
+                    <div key={i}>
+                        {isPack && <p>{item.productName.slice(0, 37)}</p>}
+                        <p>
+                            {label.padEnd(18).slice(0, 18)}
+                            {String(l.qty).padStart(3)}
+                            {String(l.price).padStart(7)}
+                            {String(item.lineTotal).padStart(7)}
+                        </p>
+                    </div>
+                );
+            })}
 
             <p>-------------------------------------</p>
             {receipt.vatEnabled ? (
@@ -45,12 +60,12 @@ export default function PrintReceipt({ receipt }) {
                 <p className="font-bold">TOTAL                    KES {receipt.totalDue}</p>
             )}
             {receipt.amountPaid > 0 && (
-    <>
-        <p>Amount Paid              KES {Number((receipt.amountPaid + (receipt.changeGiven || 0)).toFixed(2))}</p>
-        <p>Change                   KES {receipt.changeGiven || 0}</p>
-        <p>Payment: {receipt.paymentMethod}</p>
-    </>
-)}
+                <>
+                    <p>Amount Paid              KES {Number((receipt.amountPaid + (receipt.changeGiven || 0)).toFixed(2))}</p>
+                    <p>Change                   KES {receipt.changeGiven || 0}</p>
+                    <p>Payment: {receipt.paymentMethod}</p>
+                </>
+            )}
             {receipt.rewardPointsEarned > 0 && (
                 <p>Points Earned            {receipt.rewardPointsEarned}</p>
             )}
