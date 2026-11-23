@@ -5,6 +5,7 @@ import API from '../../api/axios';
 import ConfirmModal from './ConfirmModal';
 import ViewItemsModal from './ViewItemsModal';
 import { formatKenyanDateTime } from '../../utils/formatDate';
+import { lineLabel, lineQtyPrice } from '../../utils/packLine';
 
 export default function VoidRequestsView({ branch } = {}) {
     const [requests, setRequests] = useState([]);
@@ -126,7 +127,10 @@ export default function VoidRequestsView({ branch } = {}) {
                 onClose={() => setViewing(null)}
                 title={viewing?.billId}
                 subtitle={viewing ? `${viewing.branch?.name || ''}` : ''}
-                items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
+                items={(viewing?.items || []).map((i) => {
+                    const l = lineQtyPrice(i);
+                    return { name: lineLabel(i), qty: l.qty, price: l.price };
+                })}
                 total={viewing?.subtotal}
             />
 
@@ -146,4 +150,4 @@ export default function VoidRequestsView({ branch } = {}) {
             />
         </div>
     );
-                                        }
+                }
