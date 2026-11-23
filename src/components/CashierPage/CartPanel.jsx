@@ -35,7 +35,7 @@ export default function CartPanel({
                     <>
                         {cart.map((item) => (
                             <CartItem
-                                key={item.productId}
+                                key={item.lineKey}
                                 item={item}
                                 currency={currency}
                                 onUpdateQty={onUpdateQty}
