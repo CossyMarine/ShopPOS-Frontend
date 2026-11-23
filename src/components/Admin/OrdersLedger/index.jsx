@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../../api/axios';
+import { lineLabel, lineQtyPrice } from '../../../utils/packLine';
 import ViewItemsModal from '../ViewItemsModal';
 
 import SummaryCards from './SummaryCards';
@@ -275,7 +276,10 @@ export default function OrdersLedger({ branch } = {}) {
                 onClose={() => setViewing(null)}
                 title={viewing?.billId}
                 subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
-                items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
+                items={(viewing?.items || []).map((i) => {
+                    const l = lineQtyPrice(i);
+                    return { name: lineLabel(i), qty: l.qty, price: l.price };
+                })}
                 total={viewing ? amountOwed(viewing) : undefined}
                 payment={viewing ? paymentInfo(viewing) : null}
             />
@@ -287,4 +291,4 @@ export default function OrdersLedger({ branch } = {}) {
             />
         </div>
     );
-                }
+                                     }
