@@ -8,6 +8,16 @@ import logo from "../Assets/logo.png";
 const PAID_HOLD_MS = 6000;
 const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
+// NEW: "24 pcs" chip for carton / box / bale lines
+function PackPcs({ item }) {
+  if (!item.packQty) return null;
+  return (
+    <span className="ml-2 align-middle px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs sm:text-sm font-black">
+      {fmt(item.quantity * item.packQty)} pcs
+    </span>
+  );
+}
+
 export default function CustomerDisplayPage() {
   const navigate = useNavigate();
   const [till, setTill] = useState(null);
@@ -212,6 +222,7 @@ export default function CustomerDisplayPage() {
                       <p className="text-sm sm:text-base font-bold text-gray-500 mt-0.5">
                         {fmt(i.unitPrice)} KES{" "}
                         <span className="text-orange-600 font-black">× {i.quantity}</span>
+                        <PackPcs item={i} />
                       </p>
                     </div>
                   </div>
@@ -274,6 +285,7 @@ export default function CustomerDisplayPage() {
                       <p className="text-sm font-bold text-gray-500 mt-0.5">
                         {fmt(i.unitPrice)} KES{" "}
                         <span className="text-orange-600 font-black">× {i.quantity}</span>
+                        <PackPcs item={i} />
                       </p>
                     </div>
                   </div>
