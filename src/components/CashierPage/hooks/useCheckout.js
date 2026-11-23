@@ -32,16 +32,22 @@ export default function useCheckout({
 
         // Last-chance check: stock may have dropped (another register) since
         // these items were added.
-        const over = cart.find((i) => { const s = stockOf(i.productId); return s != null && i.quantity > s; });
+                const over = cart.find((i) => {
+            const s = stockOf(i.productId);
+            if (s == null) return false;
+            const used = cart.filter((c) => c.productId === i.productId).reduce((t, c) => t + c.quantity * (c.packQty || 1), 0);
+            return used > s;
+        });
         if (over) {
-            return toast.error(`Only ${stockOf(over.productId)} ${over.productName} left. Please reduce the quantity.`);
+            return toast.error(`Only ${stockOf(over.productId)} pcs of ${over.productName} left. Please reduce the quantity.`);
         }
 
         setCheckingOut(true);
         try {
-            const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, vatClass }) => ({
-                productId, productName, imageUrl, quantity, unitPrice, lineTotal: unitPrice * quantity, vatClass,
-            }));
+                        const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, vatClass, packId, packName, packQty }) => (packId
+                ? { productId, productName, imageUrl, packId, packName, packQty, packCount: quantity,
+                    quantity: quantity * packQty, unitPrice: unitPrice / packQty, lineTotal: unitPrice * quantity, vatClass }
+                : { productId, productName, imageUrl, quantity, unitPrice, lineTotal: unitPrice * quantity, vatClass }));
             const clientSaleId = crypto.randomUUID();
             // subtotal sent here is just a display hint — the server always
             // recomputes it (and the VAT/totalDue figures) from `items` itself.
