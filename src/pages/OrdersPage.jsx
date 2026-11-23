@@ -18,6 +18,7 @@ import {
 import BottomNav from "../components/BottomNav";
 import { useAuth } from "../hooks/useAuth";
 import API from "../api/axios";
+import { lineLabel, lineQtyPrice } from "../utils/packLine";
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/api\/?$/, "");
 
@@ -238,16 +239,19 @@ export default function OrdersPage() {
               </button>
             </div>
             <div className="p-4 space-y-3">
-              {itemsWithImages(viewing).map((it, idx) => (
-                <div key={idx} className="flex items-center gap-3">
-                  <ItemImage src={it.imageUrl} alt={it.productName} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-stone-800 truncate">{it.productName}</p>
-                    <p className="text-xs text-stone-400">Qty {it.quantity} × KSh {Number(it.unitPrice).toLocaleString()}</p>
+              {itemsWithImages(viewing).map((it, idx) => {
+                const l = lineQtyPrice(it);
+                return (
+                  <div key={idx} className="flex items-center gap-3">
+                    <ItemImage src={it.imageUrl} alt={it.productName} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-stone-800 truncate">{lineLabel(it)}</p>
+                      <p className="text-xs text-stone-400">Qty {l.qty} × KSh {Number(l.price).toLocaleString()}</p>
+                    </div>
+                    <p className="text-sm font-bold text-stone-900">KSh {Number(it.lineTotal).toLocaleString()}</p>
                   </div>
-                  <p className="text-sm font-bold text-stone-900">KSh {Number(it.lineTotal).toLocaleString()}</p>
-                </div>
-              ))}
+                );
+              })}
               <div className="border-t border-stone-100 pt-3 flex justify-between font-black text-stone-900">
                 <span>Total</span>
                 <span>KSh {Number(viewing.subtotal).toLocaleString()}</span>
@@ -268,4 +272,4 @@ export default function OrdersPage() {
       <BottomNav />
     </div>
   );
-}
+        }
