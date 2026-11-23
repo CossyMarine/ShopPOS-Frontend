@@ -11,12 +11,14 @@ const ceil5 = (x) => Math.ceil(x / 5) * 5;
 const r2 = (n) => Math.round((+n || 0) * 100) / 100;
 const uid = () => 'k' + Math.random().toString(36).slice(2, 9);
 const randCode = () => '6291' + Math.floor(100000000 + Math.random() * 900000000);
+const newPack = (name = '', qty = 12) => ({ key: uid(), name, qty, barcode: '', price: '', imageUrl: '', imagePublicId: '' });
 
 export default function ProductFormModal({ product, initialName = '', units, categories, suppliers, branch, onClose, onSaved, onOpenUnitManager }) {
     const p = product;
     const fileRef = useRef();
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [packBusy, setPackBusy] = useState(null);      // key of the pack whose photo is uploading
     const [err, setErr] = useState('');
     const [more, setMore] = useState(false);
     const [decTouched, setDecTouched] = useState(!!p);
@@ -31,7 +33,10 @@ export default function ProductFormModal({ product, initialName = '', units, cat
         perishable: false, allowDecimals: false, sku: '', description: '', supplier: '', vatClass: 'standard', imageUrl: '', imagePublicId: '',
         isActive: true, openQty: '', openUnit: 'b', openExp: '',
     });
-    const [packs, setPacks] = useState(() => (p?.packs || []).map((k) => ({ key: String(k._id), _id: k._id, name: k.name, qty: k.qty, barcode: k.barcode || '', price: k.price || '' })));
+    const [packs, setPacks] = useState(() => (p?.packs || []).map((k) => ({
+        key: String(k._id), _id: k._id, name: k.name, qty: k.qty, barcode: k.barcode || '', price: k.price || '',
+        imageUrl: k.imageUrl || '', imagePublicId: k.imagePublicId || '',
+    })));
 
     const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
     const unitObj = units.find((u) => u._id === f.unit);
@@ -49,7 +54,7 @@ export default function ProductFormModal({ product, initialName = '', units, cat
     const setPack = (i, patch) => setPacks((ls) => ls.map((k, j) => (j === i ? { ...k, ...patch } : k)));
     const addPreset = (n, q) => {
         if (packs.some((k) => k.name.trim().toLowerCase() === n.toLowerCase())) return toast.error(`${n} is already added`);
-        setPacks((ls) => [...ls, { key: uid(), name: n, qty: q, barcode: '', price: '' }]);
+        setPacks((ls) => [...ls, newPack(n, q)]);
     };
     const onUnit = (v) => {
         setF((s) => ({ ...s, unit: v }));
@@ -73,6 +78,23 @@ export default function ProductFormModal({ product, initialName = '', units, cat
         setUploading(false);
     };
 
+    // Photo for one pack (carton / box / bale). Looked up by key, not index,
+    // so removing another pack while it uploads can't put the photo on the wrong one.
+    const uploadPackImage = async (i, e) => {
+        const file = e.target.files?.[0]; e.target.value = '';
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) return toast.error('Max file size is 5MB');
+        const key = packs[i].key;
+        try {
+            setPackBusy(key);
+            const c = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1600, useWebWorker: true, initialQuality: 0.85 });
+            const fd = new FormData(); fd.append('image', c, file.name);
+            const res = await API.post('/products/upload-image', fd, { timeout: 30000 });
+            setPacks((ls) => ls.map((k) => (k.key === key ? { ...k, imageUrl: res.data.url, imagePublicId: res.data.publicId } : k)));
+        } catch (er) { toast.error(er.response?.data?.message || 'Image upload failed'); }
+        setPackBusy(null);
+    };
+
     const save = async (mode) => {
         setErr('');
         if (!branch) return setErr('Select a branch first.');
@@ -94,7 +116,10 @@ export default function ProductFormModal({ product, initialName = '', units, cat
             sellingPrice: price, reorderLevel: +f.reorderLevel || 0, maxLevel: +f.maxLevel || 0, reorderQty: +f.reorderQty || 0,
             perishable: f.perishable, allowDecimals: f.allowDecimals, sku: f.sku.trim(), description: f.description.trim(),
             supplier: f.supplier || null, vatClass: f.vatClass, imageUrl: f.imageUrl || null, imagePublicId: f.imagePublicId || null,
-            packs: packs.map((k) => ({ _id: k._id, name: k.name.trim(), qty: +k.qty, barcode: k.barcode.trim(), price: +k.price > 0 ? +k.price : null })),
+            packs: packs.map((k) => ({
+                _id: k._id, name: k.name.trim(), qty: +k.qty, barcode: k.barcode.trim(), price: +k.price > 0 ? +k.price : null,
+                imageUrl: k.imageUrl || null, imagePublicId: k.imagePublicId || null,
+            })),
             branch,
         };
         if (p) payload.isActive = f.isActive;
@@ -116,6 +141,7 @@ export default function ProductFormModal({ product, initialName = '', units, cat
 
     const L = ({ children }) => <label className="sk-label">{children}</label>;
     const sec = 'text-sm font-extrabold text-gray-900 mb-3';
+    const busy = saving || uploading || !!packBusy;
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto">
@@ -192,13 +218,14 @@ export default function ProductFormModal({ product, initialName = '', units, cat
                     </div>
 
                     <div className="mt-5"><p className="sk-label">Packs (optional)</p>
-                        <p className="text-xs text-gray-500 mb-3">How many <b>{abbr}</b> are inside each pack you buy or sell? Add a pack price only if a whole carton or sack sells at a different price.</p>
+                        <p className="text-xs text-gray-500 mb-3">How many <b>{abbr}</b> are inside each pack you buy or sell? Add a pack price only if a whole carton or sack sells at a different price. Each pack shows as its own tile at the till, with its own photo if you add one.</p>
                         <div className="flex flex-wrap gap-1.5 mb-3">{PRESETS.map(([n, q]) => <button key={n} type="button" className="sk-chip" onClick={() => addPreset(n, q)}><Plus size={11} />{n} ({q})</button>)}</div>
                         <div className="space-y-3">
                             {packs.length === 0 && <p className="text-sm text-gray-400">No packs yet. Everything is bought as single {abbr}.</p>}
                             {packs.map((k, i) => {
                                 const retail = price * (+k.qty || 0), pp = packPrice(k), nm = k.name.trim() || 'unit';
                                 const mg = costBase > 0 && pp > 0 ? (pp - costBase * k.qty) / pp * 100 : null;
+                                const shownImg = k.imageUrl || f.imageUrl;
                                 return (
                                     <div key={k.key} className="rounded-xl border border-gray-200 p-3 grid grid-cols-12 gap-2 items-end">
                                         <div className="col-span-5"><L>Pack name</L><input className="input" list="skPackNames" value={k.name} onChange={(e) => setPack(i, { name: e.target.value })} placeholder="Carton" /></div>
@@ -208,6 +235,25 @@ export default function ProductFormModal({ product, initialName = '', units, cat
                                             <div className="flex gap-2"><input className="input font-mono" inputMode="numeric" value={k.barcode} onChange={(e) => setPack(i, { barcode: e.target.value })} />
                                                 <button type="button" onClick={() => setPack(i, { barcode: randCode() })} className="bg-gray-200 hover:bg-gray-300 px-3 rounded-xl"><Wand2 size={14} /></button></div></div>
                                         <div className="col-span-5"><L>Selling price per pack</L><input type="number" min="0" step="any" className="input" placeholder="Auto" value={k.price} onChange={(e) => setPack(i, { price: e.target.value })} /></div>
+
+                                        {/* pack photo: its own photo at the till, else the product photo */}
+                                        <div className="col-span-12 flex items-center gap-3 rounded-xl border border-dashed border-gray-200 p-2">
+                                            <div className="h-14 w-14 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                                                {shownImg
+                                                    ? <img src={shownImg} alt="" className="h-full w-full object-cover" />
+                                                    : <ImageIcon size={18} className="text-gray-400" />}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-bold text-gray-700">{k.imageUrl ? `${nm} photo` : f.imageUrl ? 'Using the product photo' : 'No photo yet'}</p>
+                                                <p className="text-[11px] text-gray-400">{k.imageUrl ? 'Shown on the cashier tile.' : `Upload a ${nm.toLowerCase()} photo to show it at the till.`}</p>
+                                            </div>
+                                            <label className="px-3 py-2 text-xs font-bold border border-gray-200 rounded-xl cursor-pointer whitespace-nowrap hover:border-orange-400">
+                                                {packBusy === k.key ? 'Uploading…' : k.imageUrl ? 'Change' : 'Upload'}
+                                                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={!!packBusy} onChange={(e) => uploadPackImage(i, e)} />
+                                            </label>
+                                            {k.imageUrl && <button type="button" aria-label="Remove photo" onClick={() => setPack(i, { imageUrl: '', imagePublicId: '' })} className="p-2 text-gray-400 hover:text-red-600"><X size={14} /></button>}
+                                        </div>
+
                                         <p className={`col-span-12 text-xs font-semibold rounded-lg px-3 py-1.5 ${mg !== null && mg < 0 ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700'}`}>
                                             1 {nm} = {num(k.qty)} {abbr}{price > 0 ? ` · Retail ${num(k.qty)} × ${money(price)} = ${money(retail)} · ${nm} price ${money(pp)}${+k.price > 0 ? '' : ' (auto)'}` : ''}{mg !== null ? ` · Margin ${mg.toFixed(1)}%` : ''}
                                         </p>
@@ -216,7 +262,7 @@ export default function ProductFormModal({ product, initialName = '', units, cat
                             })}
                         </div>
                         <datalist id="skPackNames">{PRESETS.map(([n]) => <option key={n} value={n} />)}</datalist>
-                        <button type="button" onClick={() => setPacks((ls) => [...ls, { key: uid(), name: '', qty: 12, barcode: '', price: '' }])} className="mt-3 px-3 py-2 text-xs font-bold border border-gray-200 rounded-xl flex items-center gap-1"><Plus size={12} />Add another unit</button>
+                        <button type="button" onClick={() => setPacks((ls) => [...ls, newPack('', 12)])} className="mt-3 px-3 py-2 text-xs font-bold border border-gray-200 rounded-xl flex items-center gap-1"><Plus size={12} />Add another unit</button>
                     </div>
                 </div>
 
@@ -275,8 +321,8 @@ export default function ProductFormModal({ product, initialName = '', units, cat
                 {err && <div className="sk-flag err mt-4">{err}</div>}
                 <div className="mt-5 pt-4 border-t border-gray-100 flex flex-wrap justify-end gap-2">
                     <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl">Cancel</button>
-                    <button type="button" disabled={saving || uploading} onClick={() => save('only')} className="px-4 py-2 border border-gray-800 text-gray-900 text-xs font-extrabold rounded-xl disabled:opacity-50">{saving ? 'Saving…' : p ? 'Save' : 'Save only'}</button>
-                    <button type="button" disabled={saving || uploading} onClick={() => save('receive')} className="px-5 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-extrabold rounded-xl shadow-md disabled:opacity-50">Save and receive</button>
+                    <button type="button" disabled={busy} onClick={() => save('only')} className="px-4 py-2 border border-gray-800 text-gray-900 text-xs font-extrabold rounded-xl disabled:opacity-50">{saving ? 'Saving…' : p ? 'Save' : 'Save only'}</button>
+                    <button type="button" disabled={busy} onClick={() => save('receive')} className="px-5 py-2 bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-extrabold rounded-xl shadow-md disabled:opacity-50">Save and receive</button>
                 </div>
             </div>
         </div>
