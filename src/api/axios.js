@@ -1,8 +1,13 @@
 // src/api/axios.js
 import axios from "axios";
 
+// In production, call "/api" on our own domain. Vercel rewrites it to the
+// Render backend (see vercel.json), so the auth cookie is first-party and
+// isn't blocked on new devices/browsers. In dev, talk to the backend directly.
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "https://shoppos-backend.onrender.com/api",
+  baseURL: import.meta.env.PROD
+    ? "/api"
+    : (import.meta.env.VITE_API_URL || "http://localhost:5000/api"),
   timeout: 15000,
   withCredentials: true, // send/receive the httpOnly auth cookie
 });
