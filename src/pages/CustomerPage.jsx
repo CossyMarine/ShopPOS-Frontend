@@ -6,6 +6,8 @@ import BottomNav from '../components/BottomNav';
 import { useAuth } from '../hooks/useAuth';
 import API from '../api/axios';
 
+const kes = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
 export default function CustomerPage() {
     const { user } = useAuth();
     const isCustomer = user?.role === 'customer';
@@ -74,6 +76,12 @@ export default function CustomerPage() {
         .filter((p) => (tab === 'favorites' ? favoriteIds.has(p._id) : true))
         .filter((p) => category === 'All' || p.category === category)
         .filter((p) => !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
+
+    // One card for the piece, then one card per pack (carton / box / bale) that is in stock
+    const cards = visible.flatMap((p) => [
+        { key: p._id, p, pack: null },
+        ...(p.packs || []).map((k) => ({ key: `${p._id}:${k._id}`, p, pack: k })),
+    ]);
 
     return (
         <div className="min-h-screen bg-stone-50 pb-20">
@@ -152,33 +160,48 @@ export default function CustomerPage() {
                 </div>
             </div>
 
-            {/* CATALOG GRID */}
+            {/* CATALOG GRID — piece cards, then a card per pack */}
             <div className="px-4 mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {visible.length === 0 ? (
+                {cards.length === 0 ? (
                     <p className="col-span-full text-center text-gray-400 text-sm py-16">No products found</p>
                 ) : (
-                    visible.map((p) => (
-                        <div key={p._id} className="bg-white rounded-2xl p-3 border border-stone-200 relative">
-                            <button onClick={(e) => toggleFavorite(p._id, e)}
-                                className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-gray-50 hover:bg-red-50 flex items-center justify-center z-10">
-                                <Heart size={13} className={favoriteIds.has(p._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'} />
-                            </button>
-                            <div className="w-full h-28 sm:h-36 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-2">
-                                {p.imageUrl ? (
-                                    <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-[10px] font-black text-gray-400 text-center px-1.5 leading-tight">{p.name}</span>
+                    cards.map(({ key, p, pack }) => {
+                        const image = (pack?.imageUrl || p.imageUrl) || null;      // pack photo, else product photo
+                        const price = pack ? pack.price : p.sellingPrice;
+                        const saving = pack ? Math.round((pack.qty * p.sellingPrice - pack.price) * 100) / 100 : 0;
+                        return (
+                            <div key={key} className="bg-white rounded-2xl p-3 border border-stone-200 relative">
+                                <button onClick={(e) => toggleFavorite(p._id, e)} aria-label="Favorite"
+                                    className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-gray-50 hover:bg-red-50 flex items-center justify-center z-10">
+                                    <Heart size={13} className={favoriteIds.has(p._id) ? 'fill-red-500 text-red-500' : 'text-gray-400'} />
+                                </button>
+                                {pack && (
+                                    <span className="absolute top-4 left-4 bg-gray-900 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full z-10">
+                                        {pack.name} × {pack.qty}
+                                    </span>
+                                )}
+                                <div className="w-full h-28 sm:h-36 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden mb-2">
+                                    {image ? (
+                                        <img src={image} alt={p.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-[10px] font-black text-gray-400 text-center px-1.5 leading-tight">{p.name}</span>
+                                    )}
+                                </div>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase">{p.category}</span>
+                                <h4 className="text-xs font-extrabold text-gray-900 mt-0.5 line-clamp-2">
+                                    {pack ? `${p.name} · ${pack.name} of ${pack.qty}` : p.name}
+                                </h4>
+                                <p className="text-xs font-black text-orange-500 mt-1.5">{kes(price)} KES</p>
+                                {pack && saving > 0 && (
+                                    <p className="text-[10px] font-bold text-emerald-600 mt-0.5">Save {kes(saving)} KES vs buying singly</p>
                                 )}
                             </div>
-                            <span className="text-[9px] font-bold text-gray-400 uppercase">{p.category}</span>
-                            <h4 className="text-xs font-extrabold text-gray-900 mt-0.5 line-clamp-2">{p.name}</h4>
-                            <p className="text-xs font-black text-orange-500 mt-1.5">{p.sellingPrice} KES</p>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
 
             <BottomNav />
         </div>
     );
-            }
+                                }
