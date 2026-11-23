@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import API from '../../api/axios';
 import { formatKenyanDateTime } from '../../utils/formatDate';
+import { lineLabel, lineQtyPrice } from '../../utils/packLine';
 import PrintReceipt from '../PrintReceipt';
 
 const STATUS_STYLE = {
@@ -239,15 +240,18 @@ export default function HistoryModal({ open, onClose, branch }) {
                             <button onClick={() => setViewing(null)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
                         </div>
                         <div className="p-4 space-y-2.5">
-                            {viewing.items.map((it, idx) => (
-                                <div key={idx} className="flex justify-between text-xs">
-                                    <div>
-                                        <p className="font-bold text-gray-800">{it.productName}</p>
-                                        <p className="text-gray-400">Qty {it.quantity} × KES {it.unitPrice}</p>
+                            {viewing.items.map((it, idx) => {
+                                const l = lineQtyPrice(it);
+                                return (
+                                    <div key={idx} className="flex justify-between text-xs">
+                                        <div>
+                                            <p className="font-bold text-gray-800">{lineLabel(it)}</p>
+                                            <p className="text-gray-400">Qty {l.qty} × KES {l.price}</p>
+                                        </div>
+                                        <p className="font-bold text-gray-900">KES {it.lineTotal.toLocaleString()}</p>
                                     </div>
-                                    <p className="font-bold text-gray-900">KES {it.lineTotal.toLocaleString()}</p>
-                                </div>
-                            ))}
+                                );
+                            })}
                             <div className="border-t border-gray-100 pt-2.5 flex justify-between font-black text-sm text-gray-900">
                                 <span>Total</span>
                                 <span>KES {Number(viewing.subtotal).toLocaleString()}</span>
@@ -288,7 +292,7 @@ export default function HistoryModal({ open, onClose, branch }) {
                                     >
                                         <span className="flex items-center gap-2 font-semibold text-gray-700 text-left">
                                             {isSelected ? <CheckSquare size={13} className="text-red-500 shrink-0" /> : <Square size={13} className="text-gray-300 shrink-0" />}
-                                            {it.productName} × {it.quantity}
+                                            {lineLabel(it)} × {lineQtyPrice(it).qty}
                                         </span>
                                         <span className="font-bold text-gray-800 shrink-0">KES {it.lineTotal.toLocaleString()}</span>
                                     </button>
@@ -312,4 +316,4 @@ export default function HistoryModal({ open, onClose, branch }) {
             <PrintReceipt receipt={printReceipt} />
         </div>
     );
-}
+                }
