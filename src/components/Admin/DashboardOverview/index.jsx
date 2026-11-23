@@ -4,6 +4,7 @@ import API from '../../../api/axios';
 import { useAuth } from '../../../hooks/useAuth';
 import { useBranch } from '../../../context/BranchContext';
 import { setStoreConfig, formatDateTime } from '../../../utils/dashboardHelpers';
+import { lineLabel, lineQtyPrice } from '../../../utils/packLine';
 import ViewItemsModal from '../ViewItemsModal';
 import { THEMES, RANGES } from './constants';
 import { fetchDashboard } from './api';
@@ -141,7 +142,10 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
         onClose={() => setViewing(null)}
         title={viewing?.billId}
         subtitle={viewing ? `${viewing.branch?.name || ''} · ${viewing.cashierName || 'No cashier'}` : ''}
-        items={(viewing?.items || []).map((i) => ({ name: i.productName, qty: i.quantity, price: i.unitPrice }))}
+        items={(viewing?.items || []).map((i) => {
+          const l = lineQtyPrice(i);
+          return { name: lineLabel(i), qty: l.qty, price: l.price };
+        })}
         total={viewing?.totalDue ?? viewing?.subtotal}
         payment={viewing && viewing.status === 'paid' ? {
           method: viewing.paymentMethod, cashAmount: viewing.cashAmount, tillAmount: viewing.tillAmount,
@@ -150,4 +154,4 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
       />
     </div>
   );
-}
+      }
