@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import API from '../../../api/axios';
 import { buildOfflineSale, queueOfflineSale } from '../../../utils/offlineSync';
+import { toSaleItem, baseQtyOf } from '../../../utils/packLine';
 import { postDisplayCart, postDisplayBill } from "../displayApi";
 
 export default function useCheckout({
@@ -32,10 +33,10 @@ export default function useCheckout({
 
         // Last-chance check: stock may have dropped (another register) since
         // these items were added.
-                const over = cart.find((i) => {
+        const over = cart.find((i) => {
             const s = stockOf(i.productId);
             if (s == null) return false;
-            const used = cart.filter((c) => c.productId === i.productId).reduce((t, c) => t + c.quantity * (c.packQty || 1), 0);
+            const used = cart.filter((c) => c.productId === i.productId).reduce((t, c) => t + baseQtyOf(c), 0);
             return used > s;
         });
         if (over) {
@@ -44,10 +45,7 @@ export default function useCheckout({
 
         setCheckingOut(true);
         try {
-                        const items = cart.map(({ productId, productName, imageUrl, quantity, unitPrice, vatClass, packId, packName, packQty }) => (packId
-                ? { productId, productName, imageUrl, packId, packName, packQty, packCount: quantity,
-                    quantity: quantity * packQty, unitPrice: unitPrice / packQty, lineTotal: unitPrice * quantity, vatClass }
-                : { productId, productName, imageUrl, quantity, unitPrice, lineTotal: unitPrice * quantity, vatClass }));
+            const items = cart.map(toSaleItem);
             const clientSaleId = crypto.randomUUID();
             // subtotal sent here is just a display hint — the server always
             // recomputes it (and the VAT/totalDue figures) from `items` itself.
@@ -142,4 +140,4 @@ export default function useCheckout({
         receipt, showPayment, checkingOut, showOfflinePayment, setShowOfflinePayment,
         handleCheckout, handleOfflineCashConfirm, handlePaymentComplete, handleCancelCheckout,
     };
-                }
+}
