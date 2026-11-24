@@ -1,6 +1,7 @@
 // utils/offlineSync.js
 import API from '../api/axios';
 import { getQueuedSales, deleteQueuedSale, putQueuedSale, getQueuedSaleCount } from './offlineDb';
+import { toSaleItem, unitQtyOf } from './packLine';
 
 const sumLines = (items = []) => items.reduce((s, i) => s + (Number(i.lineTotal) || 0), 0);
 
@@ -13,10 +14,10 @@ export function buildOfflineSale({ cart, branch, customerId, customerName, shift
     const cash = Number((total - till).toFixed(2));
     return {
         clientSaleId: crypto.randomUUID(),
-        items: cart.map(({ productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass, promotionName, originalPrice }) => ({
-            productId, productName, imageUrl, quantity, unitPrice, lineTotal, vatClass,
-            promotionName: promotionName || null,
-            originalUnitPrice: originalPrice ?? unitPrice,
+        items: cart.map((c) => ({
+            ...toSaleItem(c),
+            promotionName: c.promotionName || null,
+            originalUnitPrice: (c.originalPrice ?? c.unitPrice) / unitQtyOf(c),
         })),
         branch,
         customer: customerId || null,
