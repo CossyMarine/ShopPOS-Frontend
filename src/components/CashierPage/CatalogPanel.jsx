@@ -4,6 +4,7 @@ import ProductCard from './ProductCard';
 import useBarcodeScan from './hooks/useBarcodeScan';
 import useCategoryFilter from './hooks/useCategoryFilter';
 import { lineKeyOf } from './hooks/useCart';
+import { baseQtyOf } from '../../utils/packLine';
 
 export default function CatalogPanel({ branch, products, cart, isOnline, currency, onAddToCart }) {
     const { barcode, setBarcode, barcodeRef, handleBarcodeSubmit } = useBarcodeScan({
@@ -13,11 +14,14 @@ export default function CatalogPanel({ branch, products, cart, isOnline, currenc
     });
     const { categories, category, setCategory, visibleProducts } = useCategoryFilter(products);
 
-    // One tile for the piece, then one tile per pack (smallest pack first)
+    // One tile for the base unit, then portion tiles (biggest first: ½, ¼, ⅛),
+    // then one tile per pack (smallest pack first)
     const tiles = visibleProducts.flatMap((p) => [
-        { key: p._id, p, pack: null },
+        { key: p._id, p, pack: null, portion: null },
+        ...[...(p.portions || [])].sort((a, b) => b.qty - a.qty)
+            .map((k) => ({ key: `${p._id}:${k._id}`, p, pack: null, portion: k })),
         ...[...(p.packs || [])].sort((a, b) => a.qty - b.qty)
-            .map((k) => ({ key: `${p._id}:${k._id}`, p, pack: k })),
+            .map((k) => ({ key: `${p._id}:${k._id}`, p, pack: k, portion: null })),
     ]);
 
     return (
@@ -34,13 +38,14 @@ export default function CatalogPanel({ branch, products, cart, isOnline, currenc
 
             <div className="flex-1 p-3 overflow-y-auto">
                 <div className="grid grid-cols-3 xl:grid-cols-4 gap-2.5">
-                    {tiles.map(({ key, p, pack }) => (
+                    {tiles.map(({ key, p, pack, portion }) => (
                         <ProductCard
                             key={key}
                             product={p}
                             pack={pack}
-                            qtyInCart={cart.find((i) => i.lineKey === lineKeyOf(p._id, pack?._id))?.quantity || 0}
-                            usedPieces={cart.reduce((s, i) => (i.productId === p._id ? s + i.quantity * (i.packQty || 1) : s), 0)}
+                            portion={portion}
+                            qtyInCart={cart.find((i) => i.lineKey === lineKeyOf(p._id, pack?._id || portion?._id))?.quantity || 0}
+                            usedPieces={cart.reduce((s, i) => (i.productId === p._id ? s + baseQtyOf(i) : s), 0)}
                             isOnline={isOnline}
                             currency={currency}
                             onAdd={onAddToCart}
