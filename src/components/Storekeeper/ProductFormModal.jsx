@@ -11,7 +11,17 @@ const ceil5 = (x) => Math.ceil(x / 5) * 5;
 const r2 = (n) => Math.round((+n || 0) * 100) / 100;
 const uid = () => 'k' + Math.random().toString(36).slice(2, 9);
 const randCode = () => '6291' + Math.floor(100000000 + Math.random() * 900000000);
+// In-store EAN-13: starts with 2 (reserved for store use) + check digit
+const ean13 = () => {
+  const d = '2' + Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
+  const sum = [...d].reduce((s, ch, i) => s + +ch * (i % 2 ? 3 : 1), 0);
+  return d + ((10 - (sum % 10)) % 10);
+};
 const newPack = (name = '', qty = 12) => ({ key: uid(), name, qty, barcode: '', price: '', imageUrl: '', imagePublicId: '' });
+const newPortion = (name = '', qty = '') => ({ key: uid(), name, qty, price: '', barcode: '' });
+const portionPresets = (abbr) =>
+  /^kg$/i.test(abbr) ? [['½ kg', 0.5], ['¼ kg', 0.25], ['⅛ kg', 0.125]]
+  : /^(l|ltr)$/i.test(abbr) ? [['½ L', 0.5], ['¼ L', 0.25]] : [];
 
 export default function ProductFormModal({ product, initialName = '', units, categories, suppliers, branch, onClose, onSaved, onOpenUnitManager }) {
     const p = product;
@@ -37,6 +47,10 @@ export default function ProductFormModal({ product, initialName = '', units, cat
         key: String(k._id), _id: k._id, name: k.name, qty: k.qty, barcode: k.barcode || '', price: k.price || '',
         imageUrl: k.imageUrl || '', imagePublicId: k.imagePublicId || '',
     })));
+    const [portions, setPortions] = useState(() => (p?.portions || []).map((k) => ({
+        key: String(k._id), _id: k._id, name: k.name, qty: k.qty, price: k.price || '', barcode: k.barcode || '',
+    })));
+    const [showPortions, setShowPortions] = useState(() => (p?.portions || []).length > 0);
 
     const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
     const unitObj = units.find((u) => u._id === f.unit);
@@ -52,6 +66,13 @@ export default function ProductFormModal({ product, initialName = '', units, cat
 
     const changeCostUnit = (key) => setF((s) => ({ ...s, costUnit: key, costInput: costBase > 0 ? r2(costBase * qtyOf(key)) : '' }));
     const setPack = (i, patch) => setPacks((ls) => ls.map((k, j) => (j === i ? { ...k, ...patch } : k)));
+    const setPortion = (i, patch) => setPortions((ls) => ls.map((k, j) => (j === i ? { ...k, ...patch } : k)));
+    const addPortion = (name = '', qty = '') => {
+        if (name && portions.some((k) => k.name.trim().toLowerCase() === name.toLowerCase())) return toast.error(`${name} is already added`);
+        setPortions((ls) => [...ls, { ...newPortion(name, qty), price: qty && price > 0 ? ceil5(price * qty) : '' }]);
+    };
+    const openPortions = () => { setShowPortions(true); set('allowDecimals', true); }; // ½ needs decimals
+    const removePortions = () => { setPortions([]); setShowPortions(false); };
     const addPreset = (n, q) => {
         if (packs.some((k) => k.name.trim().toLowerCase() === n.toLowerCase())) return toast.error(`${n} is already added`);
         setPacks((ls) => [...ls, newPack(n, q)]);
@@ -109,6 +130,16 @@ export default function ProductFormModal({ product, initialName = '', units, cat
             if (seen.has(nm.toLowerCase())) return setErr(`Pack names must be different. Check "${nm}".`);
             seen.add(nm.toLowerCase());
         }
+        const pSeen = new Set();
+        for (const k of portions) {
+            const nm = k.name.trim();
+            if (!nm) return setErr('Every portion needs a name.');
+            if (!(+k.qty > 0)) return setErr(`${nm}: enter how much ${abbr} it uses.`);
+            if (!(+k.price > 0)) return setErr(`${nm}: enter its selling price.`);
+            if (pSeen.has(nm.toLowerCase())) return setErr(`Portion names must be different. Check "${nm}".`);
+            pSeen.add(nm.toLowerCase());
+        }
+        if (portions.length && !f.allowDecimals) return setErr('Turn on "allow decimals" so portions like ½ can be sold.');
         if (+f.maxLevel > 0 && +f.maxLevel <= (+f.reorderLevel || 0)) return setErr('Max level must be higher than the reorder level.');
 
         const payload = {
@@ -120,6 +151,7 @@ export default function ProductFormModal({ product, initialName = '', units, cat
                 _id: k._id, name: k.name.trim(), qty: +k.qty, barcode: k.barcode.trim(), price: +k.price > 0 ? +k.price : null,
                 imageUrl: k.imageUrl || null, imagePublicId: k.imagePublicId || null,
             })),
+            portions: portions.map((k) => ({ _id: k._id, name: k.name.trim(), qty: +k.qty, price: +k.price, barcode: k.barcode.trim() })),
             branch,
         };
         if (p) payload.isActive = f.isActive;
@@ -263,6 +295,59 @@ export default function ProductFormModal({ product, initialName = '', units, cat
                         </div>
                         <datalist id="skPackNames">{PRESETS.map(([n]) => <option key={n} value={n} />)}</datalist>
                         <button type="button" onClick={() => setPacks((ls) => [...ls, newPack('', 12)])} className="mt-3 px-3 py-2 text-xs font-bold border border-gray-200 rounded-xl flex items-center gap-1"><Plus size={12} />Add another unit</button>
+                    </div>
+
+                    {/* portions: sell LESS than one base unit */}
+                    <div className="mt-5">
+                      {!showPortions ? (
+                        <button type="button" onClick={openPortions}
+                          className="px-3 py-2 text-xs font-bold border border-dashed border-gray-300 rounded-xl flex items-center gap-1">
+                          <Plus size={12} />Sell in portions (sugar, rice, soap…)
+                        </button>
+                      ) : (
+                        <div>
+                          <p className="sk-label">Portions</p>
+                          <p className="text-xs text-gray-500 mb-3">
+                            Sell less than one <b>{abbr}</b> (½, ¼, ⅛…). Each portion has its own price and an optional barcode, and takes its share out of the same stock.
+                          </p>
+                          {portionPresets(abbr).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {portionPresets(abbr).map(([n, q]) => (
+                                <button key={n} type="button" className="sk-chip" onClick={() => addPortion(n, q)}>+ {n}</button>
+                              ))}
+                            </div>
+                          )}
+                          <div className="space-y-3">
+                            {portions.map((k, i) => {
+                              const cost = costBase * (+k.qty || 0);
+                              const below = cost > 0 && +k.price > 0 && +k.price < cost;
+                              return (
+                                <div key={k.key} className="grid grid-cols-12 gap-2 p-3 border border-gray-200 rounded-xl">
+                                  <div className="col-span-5"><L>Name</L><input className="input" value={k.name} placeholder="½ kg" onChange={(e) => setPortion(i, { name: e.target.value })} /></div>
+                                  <div className="col-span-4"><L>Uses ({abbr})</L><input type="number" min="0" step="any" className="input" value={k.qty} onChange={(e) => setPortion(i, { qty: e.target.value })} /></div>
+                                  <div className="col-span-3 flex justify-end items-end"><button type="button" onClick={() => setPortions((ls) => ls.filter((_, j) => j !== i))} className="px-3 py-2 text-xs font-bold border border-gray-200 rounded-xl"><X size={12} /></button></div>
+                                  <div className="col-span-5"><L>Price</L><input type="number" min="0" step="any" className="input" value={k.price} onChange={(e) => setPortion(i, { price: e.target.value })} /></div>
+                                  <div className="col-span-7"><L>Barcode (optional)</L>
+                                    <div className="flex gap-2">
+                                      <input className="input font-mono" inputMode="numeric" value={k.barcode} onChange={(e) => setPortion(i, { barcode: e.target.value })} />
+                                      <button type="button" title="Generate" onClick={() => setPortion(i, { barcode: ean13() })} className="bg-gray-200 hover:bg-gray-300 px-3 rounded-xl"><Wand2 size={14} /></button>
+                                    </div>
+                                  </div>
+                                  {cost > 0 && (
+                                    <p className={`col-span-12 text-xs ${below ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
+                                      {below ? '⚠ Below cost. ' : ''}Cost {money(cost)} · profit {money(+k.price - cost)}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex gap-2 mt-3">
+                            <button type="button" onClick={() => addPortion()} className="px-3 py-2 text-xs font-bold border border-gray-200 rounded-xl flex items-center gap-1"><Plus size={12} />Add portion</button>
+                            <button type="button" onClick={removePortions} className="px-3 py-2 text-xs font-bold text-red-600 border border-red-200 rounded-xl">Remove portions</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                 </div>
 
