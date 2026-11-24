@@ -8,7 +8,11 @@ export default function CartItem({ item, currency, onUpdateQty, onRemove }) {
                 <h4 className="text-xs font-bold text-gray-900 truncate">{item.displayName || item.productName}</h4>
                 <span className="text-[10px] text-gray-500 flex items-center gap-1 flex-wrap">
                     {item.unitPrice} {currency} × {item.quantity}
-                    {isPack && <span className="text-[9px] bg-indigo-50 text-indigo-600 font-bold px-1 rounded">{item.quantity * item.packQty} pcs</span>}
+                    {(isPack || item.portionId) && (
+                        <span className="text-[9px] bg-indigo-50 text-indigo-600 font-bold px-1 rounded">
+                            {Number((item.quantity * (item.packQty || item.portionQty)).toFixed(3))} base
+                        </span>
+                    )}
                     {item.promotionName && (
                         <span className="text-[9px] bg-red-50 text-red-500 font-bold px-1 rounded">{item.promotionName}</span>
                     )}
