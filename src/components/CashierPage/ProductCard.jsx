@@ -1,22 +1,32 @@
-import { packPriceOf, packPromoPrice } from '../../utils/packLine';
+import { packPriceOf, packPromoPrice, portionPromoPrice } from '../../utils/packLine';
 
-export default function ProductCard({ product: p, pack = null, qtyInCart, usedPieces, isOnline, currency, onAdd }) {
-    const size = pack ? pack.qty : 1;
+export default function ProductCard({ product: p, pack = null, portion = null, qtyInCart, usedPieces, isOnline, currency, onAdd }) {
+    const unit = pack || portion;                       // the pack OR portion this tile sells (null = base unit)
+    const size = unit ? unit.qty : 1;
+    const abbr = p.unit?.abbreviation || 'pcs';
     const stockPieces = p.currentStock ?? 0;
     // Online: what's left after what's already in the cart. Offline: cached stock only.
     const leftPieces = isOnline ? stockPieces - usedPieces : stockPieces;
-    const stock = Math.floor(stockPieces / size);       // sellable units (packs or pieces)
-    const left = Math.floor(leftPieces / size);
+    // Sellable units (packs, portions or base units). The toFixed avoids float noise: 0.3 ÷ 0.1 must be 3, not 2.
+    const count = (x) => Math.floor(Number((x / size).toFixed(6)));
+    const stock = count(stockPieces);
+    const left = count(leftPieces);
     const blocked = stock <= 0 || left <= 0;
     const promo = p.activePromotion;
 
-    const price = pack ? packPromoPrice(p, pack) : (promo?.effectivePrice ?? p.sellingPrice);
-    const original = pack ? packPriceOf(p, pack) : p.sellingPrice;
+    const price = pack
+        ? packPromoPrice(p, pack)
+        : portion
+            ? portionPromoPrice(p, portion)
+            : (promo?.effectivePrice ?? p.sellingPrice);
+    const original = pack ? packPriceOf(p, pack) : portion ? portion.price : p.sellingPrice;
     const image = (pack?.imageUrl || p.imageUrl) || null;      // pack photo, else product photo
-    const badge = stock <= 0 ? (pack && stockPieces > 0 ? `Need ${size} pcs` : 'Out') : left <= 0 ? 'Max' : left;
+    const badge = stock <= 0
+        ? (unit && stockPieces > 0 ? `Need ${size} ${abbr}` : 'Out')
+        : left <= 0 ? 'Max' : left;
 
     return (
-        <button onClick={() => onAdd(p, 1, pack)} disabled={blocked}
+        <button onClick={() => onAdd(p, 1, pack, portion)} disabled={blocked}
             className="relative text-left p-2.5 bg-white rounded-xl border border-gray-200 hover:border-brand-orange hover:shadow-md transition flex flex-col disabled:opacity-40">
             {qtyInCart > 0 && (
                 <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1 rounded-full bg-brand-orange text-white text-[11px] font-black flex items-center justify-center shadow-md ring-2 ring-white z-10">
@@ -26,6 +36,11 @@ export default function ProductCard({ product: p, pack = null, qtyInCart, usedPi
             {pack && (
                 <span className="absolute top-3.5 left-3.5 bg-gray-900 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full z-10">
                     {pack.name} × {pack.qty}
+                </span>
+            )}
+            {portion && (
+                <span className="absolute top-3.5 left-3.5 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full z-10">
+                    {portion.name}
                 </span>
             )}
             {promo && (
@@ -40,7 +55,9 @@ export default function ProductCard({ product: p, pack = null, qtyInCart, usedPi
                     <span className="text-[10px] font-black text-gray-400 text-center px-1 leading-tight">{p.name}</span>
                 )}
             </div>
-            <h4 className="text-xs font-bold text-gray-800 line-clamp-2">{pack ? `${p.name} · ${pack.name} of ${pack.qty}` : p.name}</h4>
+            <h4 className="text-xs font-bold text-gray-800 line-clamp-2">
+                {pack ? `${p.name} · ${pack.name} of ${pack.qty}` : portion ? `${p.name} · ${portion.name}` : p.name}
+            </h4>
             <div className="mt-1.5 flex justify-between items-center">
                 {price !== original ? (
                     <span className="flex items-baseline gap-1">
