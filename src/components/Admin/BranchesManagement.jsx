@@ -76,6 +76,19 @@ export default function BranchesManagement() {
         setTogglingId(null);
     };
 
+    // Toggles whether cashiers at this branch can sell on credit
+    const toggleCredit = async (branch) => {
+        setTogglingId(branch._id);
+        try {
+            await API.put(`/branches/${branch._id}`, { allowCredit: !branch.allowCredit });
+            toast.success(branch.allowCredit ? 'Credit sales turned off' : 'Credit sales turned on');
+            fetchBranches();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update branch');
+        }
+        setTogglingId(null);
+    };
+
     // ---- Branch till (tillNumber / tillName) ----
     // Reads the unsaved draft first, then the saved value, so typing feels instant.
     const tillValue = (b, key) => tillDrafts[b._id]?.[key] ?? b[key] ?? '';
@@ -206,10 +219,16 @@ export default function BranchesManagement() {
                                         {b.manager ? `Manager: ${b.manager.fullName}` : 'Assign a manager'}
                                     </button>
                                 )}
-                                <button onClick={() => toggleWarehouse(b)} disabled={togglingId === b._id}
-                                    className="text-[10px] font-bold text-gray-400 hover:text-indigo-600 disabled:opacity-50">
-                                    {togglingId === b._id ? '…' : b.isWarehouse ? 'Unmark warehouse' : 'Mark as warehouse'}
-                                </button>
+                                <div className="flex flex-col items-end gap-1">
+                                    <button onClick={() => toggleCredit(b)} disabled={togglingId === b._id}
+                                        className={`text-[10px] font-bold disabled:opacity-50 ${b.allowCredit ? 'text-amber-600' : 'text-gray-400 hover:text-amber-600'}`}>
+                                        {togglingId === b._id ? '…' : b.allowCredit ? 'Credit: ON (turn off)' : 'Allow credit sales'}
+                                    </button>
+                                    <button onClick={() => toggleWarehouse(b)} disabled={togglingId === b._id}
+                                        className="text-[10px] font-bold text-gray-400 hover:text-indigo-600 disabled:opacity-50">
+                                        {togglingId === b._id ? '…' : b.isWarehouse ? 'Unmark warehouse' : 'Mark as warehouse'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -222,4 +241,4 @@ export default function BranchesManagement() {
             `}</style>
         </div>
     );
-        }
+            }
