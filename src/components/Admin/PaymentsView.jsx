@@ -10,6 +10,7 @@ import PaymentDetailsModal from './PaymentDetailsModal';
 import ConfirmModal from './ConfirmModal';
 import { PaymentSummaryCards } from './PaymentSummaryCards';
 import { PaymentFilters } from './PaymentFilters';
+import CreditRecordsTab from './CreditRecordsTab';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
@@ -22,6 +23,7 @@ const METHOD_META = {
     manual_till:   { label: 'Manual Till', icon: Landmark,   color: 'text-amber-600 bg-amber-50 border-amber-200' },
     reward:        { label: 'Reward',      icon: Gift,       color: 'text-pink-600 bg-pink-50 border-pink-200' },
     both:          { label: 'Split',       icon: Layers,     color: 'text-slate-600 bg-slate-100 border-slate-200' },
+    credit:        { label: 'Credit',      icon: Wallet,     color: 'text-rose-600 bg-rose-50 border-rose-200' },
 };
 
 function MethodPill({ method }) {
@@ -223,6 +225,16 @@ export default function PaymentsView({ onPendingChange }) {
                         <span className="w-2 h-2 rounded-full bg-red-500" />
                     )}
                 </button>
+                <button
+                    onClick={() => setTab('credit')}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                        tab === 'credit'
+                            ? 'bg-orange-500 text-white shadow-md shadow-orange-500/10'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:text-orange-500 shadow-sm'
+                    }`}
+                >
+                    Credit Records
+                </button>
             </div>
 
             {tab === 'all' && (
@@ -390,6 +402,10 @@ export default function PaymentsView({ onPendingChange }) {
                 </div>
             )}
 
+            {tab === 'credit' && (
+                <CreditRecordsTab onChanged={() => { fetchSummary(); fetchTransactions(1); }} />
+            )}
+
             <PaymentDetailsModal
                 open={!!viewing}
                 onClose={() => setViewing(null)}
@@ -412,4 +428,4 @@ export default function PaymentsView({ onPendingChange }) {
             />
         </div>
     );
-                                                            }
+        }
