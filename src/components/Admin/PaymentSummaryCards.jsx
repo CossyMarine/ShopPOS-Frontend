@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wallet, Banknote, Gift, Store, Smartphone } from 'lucide-react';
+import { Wallet, Banknote, Gift, Store, Smartphone, BookOpen } from 'lucide-react';
 
 export const PaymentSummaryCards = ({ metrics }) => {
   const cards = [
@@ -38,10 +38,17 @@ export const PaymentSummaryCards = ({ metrics }) => {
       textColor: 'text-indigo-600',
       bgColor: 'bg-indigo-50',
     },
+    {
+      title: 'Credit Owed',
+      value: metrics.creditOutstanding || 0,
+      icon: BookOpen,
+      textColor: 'text-rose-600',
+      bgColor: 'bg-rose-50',
+    },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 my-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 my-6">
       {cards.map((card, index) => {
         const IconComponent = card.icon;
         return (
