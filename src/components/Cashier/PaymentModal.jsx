@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
-import { X, Banknote, Smartphone, Landmark, Layers, Gift, CheckCircle2, Printer } from 'lucide-react';
+import { X, Banknote, Smartphone, Landmark, Layers, Gift, CheckCircle2, Printer, BookOpen } from 'lucide-react';
 import API from '../../api/axios';
 import useConfirm from '../Storekeeper/useConfirm';
 import PrintReceipt from '../PrintReceipt';
@@ -15,6 +15,8 @@ const METHODS = [
 
 const NOTES = [100, 200, 500, 1000, 2000, 5000];
 
+const CREDIT_METHOD = { id: 'credit', label: 'Credit', icon: BookOpen };
+
 // Shared sizing so every screen feels consistent and easy to tap
 const LABEL = 'text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5 block';
 const INPUT = 'w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3.5 text-lg font-bold text-gray-900 text-center focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 disabled:opacity-60';
@@ -28,6 +30,23 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
     const [processing, setProcessing] = useState(false);
     const [stkStatus, setStkStatus] = useState(null); // 'pending' | 'success' | 'failed'
     const [closing, setClosing] = useState(false);
+
+    // ---- Credit ----
+    const [creditAllowed, setCreditAllowed] = useState(false);
+    const [creditName, setCreditName] = useState('');
+    const [creditPhone, setCreditPhone] = useState('');
+    const [creditDue, setCreditDue] = useState('');
+    const [creditSaving, setCreditSaving] = useState(false);
+    const [paidOnCredit, setPaidOnCredit] = useState(false);
+
+    useEffect(() => {
+        API.get('/branches/mine')
+            .then((r) => setCreditAllowed(!!r.data?.allowCredit))
+            .catch(() => {});
+    }, []);
+
+    const methods = creditAllowed ? [...METHODS, CREDIT_METHOD] : METHODS;
+
     const [ask, confirmDialog] = useConfirm();
     const pollRef = useRef(null);
 
@@ -195,6 +214,24 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
 
     const handleComboPrompt = () => sendMpesaPrompt(comboPromptPhone, comboRemaining, setComboSendingPrompt);
 
+    // ---- CREDIT: customer name required, pay date optional ----
+    const handleCredit = async () => {
+        if (!creditName.trim()) return toast.error("Enter the customer's name");
+        setCreditSaving(true);
+        try {
+            await API.patch(`/receipts/${receipt._id}/pay/credit`, {
+                customerName: creditName.trim(),
+                customerPhone: creditPhone.trim() || undefined,
+                dueDate: creditDue || undefined,
+            });
+            setPaidOnCredit(true);
+            finishPayment();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Could not record credit');
+        }
+        setCreditSaving(false);
+    };
+
     // ---- CONFIRM: award points (if a customer was entered) then print directly ----
     const handleConfirm = async () => {
         setConfirming(true);
@@ -269,8 +306,13 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-gray-200 text-center">
                         <CheckCircle2 size={56} className="text-green-500 mx-auto mb-3" />
-                        <h3 className="text-2xl font-black text-gray-900 mb-1">Payment Complete</h3>
+                        <h3 className="text-2xl font-black text-gray-900 mb-1">{paidOnCredit ? 'Credit Recorded' : 'Payment Complete'}</h3>
                         <p className="text-sm text-gray-600">{receipt.billId}</p>
+                        {paidOnCredit && (
+                            <p className="text-sm font-bold text-amber-600 mt-2">
+                                KES {balanceDue.toLocaleString()} owed by {creditName}
+                            </p>
+                        )}
 
                         {changeDue > 0 && (
                             <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl py-4 my-5">
@@ -279,13 +321,15 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                             </div>
                         )}
 
-                        <input
-                            value={rewardIdentifier}
-                            onChange={(e) => setRewardIdentifier(e.target.value)}
-                            placeholder="Customer email or phone for reward points (optional)"
-                            disabled={confirming}
-                            className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3.5 text-base text-gray-900 my-4 focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
-                        />
+                        {!paidOnCredit && (
+                            <input
+                                value={rewardIdentifier}
+                                onChange={(e) => setRewardIdentifier(e.target.value)}
+                                placeholder="Customer email or phone for reward points (optional)"
+                                disabled={confirming}
+                                className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3.5 text-base text-gray-900 my-4 focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+                            />
+                        )}
 
                         <button
                             onClick={handleConfirm}
@@ -333,8 +377,8 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
 
                 {/* Method tabs are hidden once a partial amount is applied and only the M-Pesa remainder is left */}
                 {comboRemaining === null && (
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-6">
-                        {METHODS.map((m) => (
+                    <div className={`grid grid-cols-3 ${creditAllowed ? 'sm:grid-cols-6' : 'sm:grid-cols-5'} gap-2.5 mb-6`}>
+                        {methods.map((m) => (
                             <button
                                 key={m.id}
                                 onClick={() => setMethod(m.id)}
@@ -594,8 +638,58 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                         )}
                     </div>
                 )}
+
+                {/* CREDIT */}
+                {comboRemaining === null && method === 'credit' && (
+                    <div className="space-y-4">
+                        <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 text-center">
+                            <BookOpen size={30} className="text-amber-600 mx-auto mb-2" />
+                            <p className="text-base text-gray-800 font-medium">
+                                The customer takes the goods now and pays later. KES {balanceDue.toLocaleString()} will be recorded as owed.
+                            </p>
+                        </div>
+                        <div>
+                            <label className={LABEL}>Customer name *</label>
+                            <input
+                                value={creditName}
+                                onChange={(e) => setCreditName(e.target.value)}
+                                placeholder="Full name"
+                                className={`${INPUT} !text-xl`}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className={LABEL}>Phone (optional)</label>
+                                <input
+                                    value={creditPhone}
+                                    onChange={(e) => setCreditPhone(e.target.value)}
+                                    placeholder="07…"
+                                    inputMode="tel"
+                                    className={INPUT}
+                                />
+                            </div>
+                            <div>
+                                <label className={LABEL}>Will pay on (optional)</label>
+                                <input
+                                    type="date"
+                                    min={new Date().toISOString().slice(0, 10)}
+                                    value={creditDue}
+                                    onChange={(e) => setCreditDue(e.target.value)}
+                                    className={INPUT}
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleCredit}
+                            disabled={creditSaving || !creditName.trim()}
+                            className={`${BTN} bg-amber-500 hover:bg-amber-600`}
+                        >
+                            {creditSaving ? 'Saving…' : `Record Credit · KES ${balanceDue.toLocaleString()}`}
+                        </button>
+                    </div>
+                )}
             </div>
             {confirmDialog}
         </div>
     );
-    }
+        }
