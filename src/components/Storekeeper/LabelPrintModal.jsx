@@ -78,8 +78,9 @@ export default function LabelPrintModal({ product, onClose }) {
   const [loadingBranch, setLoadingBranch] = useState(true);
   const [copies, setCopies] = useState(1);
 
-  // Which barcode to print: the single item, or any pack that has its own
-  // barcode (Box, Carton, Sack...). A pack label shows the pack's price.
+  // Which barcode to print: the single item, any portion with its own barcode
+  // (½ kg, ¼ kg...), or any pack with its own barcode (Box, Carton, Sack...).
+  // Each label shows the price of the thing it represents.
   const unitAbbr = product.unit?.abbreviation || 'pc';
   const options = [
     {
@@ -88,6 +89,15 @@ export default function LabelPrintModal({ product, onClose }) {
       name: product.name,
       price: product.sellingPrice,
     },
+    ...[...(product.portions || [])]
+      .filter((k) => k.barcode)
+      .sort((a, b) => b.qty - a.qty)
+      .map((k) => ({
+        label: `${k.name} (${k.qty} ${unitAbbr})`,
+        code: k.barcode,
+        name: `${product.name} - ${k.name}`,
+        price: k.price,
+      })),
     ...(product.packs || [])
       .filter((k) => k.barcode)
       .map((k) => ({
@@ -160,7 +170,7 @@ export default function LabelPrintModal({ product, onClose }) {
             </div>
           )}
 
-          {/* Barcode picker: only shown when the product has pack barcodes */}
+          {/* Barcode picker: only shown when the product has portion or pack barcodes */}
           {options.length > 1 && (
             <div>
               <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Barcode to print</label>
@@ -243,4 +253,4 @@ export default function LabelPrintModal({ product, onClose }) {
       `}</style>
     </div>
   );
-            }
+                }
