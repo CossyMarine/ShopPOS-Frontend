@@ -1,4 +1,4 @@
-import { X, ShieldCheck, User, UserCircle2, Mail, Phone, Clock, Landmark, Smartphone, Wallet, Gift, Layers } from 'lucide-react';
+import { X, ShieldCheck, User, UserCircle2, Mail, Phone, Clock, Landmark, Smartphone, Wallet, Gift, Layers, BookOpen } from 'lucide-react';
 
 const METHOD_META = {
     cash:          { label: 'Cash',        icon: Wallet },
@@ -105,10 +105,50 @@ function PaymentRow({ payment, receipt, muted }) {
     );
 }
 
+// The "credit" entry records that the bill was given on credit — it is the sale,
+// not money received, so it gets its own block instead of a payment row.
+function CreditRow({ payment, balanceDue }) {
+    const customer = (payment.reference || '').replace(/^Credit\s*—\s*/, '') || 'Customer';
+    const givenBy = payment.paidBy?.fullName;
+
+    return (
+        <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide border border-rose-200 text-rose-600 bg-white">
+                    <BookOpen size={11} /> Given on credit
+                </span>
+                <span className="font-black text-rose-600 text-sm">
+                    KES {Number(payment.amount).toLocaleString()}
+                </span>
+            </div>
+
+            <p className="font-bold text-gray-800 text-sm">{customer}</p>
+            <p className={`text-xs font-semibold mt-1 ${balanceDue > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                {balanceDue > 0
+                    ? `Still owing KES ${balanceDue.toLocaleString()}`
+                    : 'Settled in full'}
+            </p>
+
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-rose-100">
+                <span className="text-[11px] text-gray-400">
+                    {givenBy ? `Recorded by ${givenBy}` : 'Not money received'}
+                </span>
+                <span className="flex items-center gap-1 text-[11px] text-gray-400">
+                    <Clock size={11} />
+                    {new Date(payment.paidAt).toLocaleString()}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 export default function PaymentDetailsModal({ open, onClose, receipt }) {
     if (!open || !receipt) return null;
 
-    const payments = receipt.payments || [];
+    const allPayments = receipt.payments || [];
+    const creditEntry = allPayments.find((p) => p.method === 'credit') || null;
+    // Money actually received (the credit entry is the sale on credit, not money)
+    const payments = allPayments.filter((p) => p.method !== 'credit');
     const pending = receipt.pendingManualPayments || [];
     // totalDue = what the customer owes (VAT included); subtotal is net-of-VAT.
     // Falls back to subtotal for old receipts that predate totalDue.
@@ -150,13 +190,24 @@ export default function PaymentDetailsModal({ open, onClose, receipt }) {
                         </div>
                     </div>
 
+                    {creditEntry && (
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-rose-400 font-bold mb-2">
+                                Credit
+                            </p>
+                            <CreditRow payment={creditEntry} balanceDue={balanceDue} />
+                        </div>
+                    )}
+
                     <div>
                         <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-2">
-                            Payments ({payments.length})
+                            {creditEntry ? 'Money received' : 'Payments'} ({payments.length})
                         </p>
                         <div className="space-y-2">
                             {payments.length === 0 ? (
-                                <p className="text-gray-400 text-sm text-center py-4">No payments recorded yet</p>
+                                <p className="text-gray-400 text-sm text-center py-4">
+                                    {creditEntry ? 'No money received yet' : 'No payments recorded yet'}
+                                </p>
                             ) : (
                                 payments.map((p, idx) => <PaymentRow key={idx} payment={p} receipt={receipt} />)
                             )}
@@ -194,4 +245,4 @@ export default function PaymentDetailsModal({ open, onClose, receipt }) {
             </div>
         </div>
     );
-                    }
+            }
