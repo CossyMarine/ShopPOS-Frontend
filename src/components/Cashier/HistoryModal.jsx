@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import {
     X, Search, Eye, Printer, ShieldAlert, ChevronLeft, ChevronRight,
-    ShoppingBag, TrendingUp, Clock, CheckSquare, Square,
+    ShoppingBag, TrendingUp, Clock, CheckSquare, Square, BookOpen,
 } from 'lucide-react';
 import API from '../../api/axios';
 import { formatKenyanDateTime } from '../../utils/formatDate';
@@ -14,8 +14,13 @@ const STATUS_STYLE = {
     unpaid: 'bg-amber-100 text-amber-700',
     partial: 'bg-blue-100 text-blue-700',
     paid: 'bg-green-100 text-green-700',
+    credit: 'bg-rose-100 text-rose-700',
     voided: 'bg-red-100 text-red-700',
 };
+
+// A bill that was given on credit (still owing, or since settled) can only be voided whole
+const isCreditBill = (r) =>
+    !!r && (r.status === 'credit' || (r.payments || []).some((p) => p.method === 'credit'));
 
 export default function HistoryModal({ open, onClose, branch }) {
     const [receipts, setReceipts] = useState([]);
@@ -93,15 +98,18 @@ export default function HistoryModal({ open, onClose, branch }) {
         });
     };
 
+    const voidOnlyFull = isCreditBill(voiding);
+
     const submitVoid = async () => {
         if (!voiding) return;
         if (!reason.trim()) return toast.error('Enter a reason for the void');
-        if (!voidAll && selected.size === 0) return toast.error('Select at least one item, or choose "Void entire sale"');
+        const wholeSale = voidAll || voidOnlyFull;
+        if (!wholeSale && selected.size === 0) return toast.error('Select at least one item, or choose "Void entire sale"');
 
         setSubmitting(true);
         try {
             const body = { receiptId: voiding._id, reason: reason.trim() };
-            if (!voidAll) body.items = [...selected];
+            if (!wholeSale) body.items = [...selected];
             await API.post('/void-requests', body);
             toast.success('Void request sent — awaiting manager approval');
             setVoiding(null);
@@ -124,6 +132,9 @@ export default function HistoryModal({ open, onClose, branch }) {
         setPrintingId(null);
     };
 
+    // Sales today = bills paid today + bills given on credit today
+    const salesToday = (summary?.paidToday ?? 0) + (summary?.creditToday ?? 0);
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-2xl w-full max-w-3xl h-[90vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden">
@@ -137,19 +148,30 @@ export default function HistoryModal({ open, onClose, branch }) {
                 </div>
 
                 {/* Today's totals */}
-                <div className="px-4 sm:px-5 pt-4 grid grid-cols-2 gap-3 shrink-0">
+                <div className="px-4 sm:px-5 pt-4 grid grid-cols-3 gap-2 sm:gap-3 shrink-0">
                     <div className="bg-brand-orange-light border border-orange-100 rounded-xl p-3">
                         <p className="text-[11px] font-bold text-brand-orange flex items-center gap-1">
                             <TrendingUp size={12} /> Total Sales Today
                         </p>
-                        <p className="text-lg font-black text-gray-900">
-                            KES {(summary?.paidToday ?? 0).toLocaleString()}
+                        <p className="text-base sm:text-lg font-black text-gray-900">
+                            KES {salesToday.toLocaleString()}
                         </p>
-                        <p className="text-[10px] text-gray-500 font-semibold">{summary?.paidTodayCount ?? 0} paid bills</p>
+                        <p className="text-[10px] text-gray-500 font-semibold">
+                            {(summary?.paidTodayCount ?? 0) + (summary?.creditTodayCount ?? 0)} bill(s), credit included
+                        </p>
+                    </div>
+                    <div className="bg-rose-50 border border-rose-100 rounded-xl p-3">
+                        <p className="text-[11px] font-bold text-rose-600 flex items-center gap-1">
+                            <BookOpen size={12} /> On Credit Today
+                        </p>
+                        <p className="text-base sm:text-lg font-black text-gray-900">
+                            KES {(summary?.creditToday ?? 0).toLocaleString()}
+                        </p>
+                        <p className="text-[10px] text-gray-500 font-semibold">{summary?.creditTodayCount ?? 0} bill(s) still owing</p>
                     </div>
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
                         <p className="text-[11px] font-bold text-gray-500">Unpaid / Partial Today</p>
-                        <p className="text-lg font-black text-gray-900">
+                        <p className="text-base sm:text-lg font-black text-gray-900">
                             KES {(summary?.unpaidToday ?? 0).toLocaleString()}
                         </p>
                         <p className="text-[10px] text-gray-500 font-semibold">{summary?.unpaidTodayCount ?? 0} bill(s)</p>
@@ -190,7 +212,7 @@ export default function HistoryModal({ open, onClose, branch }) {
                                 </p>
                                 <div className="flex items-center gap-2 mt-1.5">
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[r.status] || 'bg-gray-100 text-gray-600'}`}>
-                                        {r.status}
+                                        {r.status === 'credit' ? 'on credit' : r.status}
                                     </span>
                                     <span className="text-[11px] font-bold text-brand-orange">KES {Number(r.subtotal).toLocaleString()}</span>
                                 </div>
@@ -274,31 +296,39 @@ export default function HistoryModal({ open, onClose, branch }) {
 
                         <button
                             onClick={() => { setVoidAll(true); setSelected(new Set()); }}
-                            className={`w-full flex items-center gap-2 text-xs font-bold p-2.5 rounded-xl border mb-2 ${voidAll ? 'bg-red-50 border-red-300 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+                            className={`w-full flex items-center gap-2 text-xs font-bold p-2.5 rounded-xl border mb-2 ${voidAll || voidOnlyFull ? 'bg-red-50 border-red-300 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
                         >
-                            {voidAll ? <CheckSquare size={14} /> : <Square size={14} />}
+                            {voidAll || voidOnlyFull ? <CheckSquare size={14} /> : <Square size={14} />}
                             Void entire sale (all {voiding.items.length} item(s))
                         </button>
 
-                        <p className="text-[11px] font-bold text-gray-400 mt-3 mb-1.5">Or select individual items to void:</p>
-                        <div className="space-y-1.5 mb-3 max-h-48 overflow-y-auto">
-                            {voiding.items.map((it, idx) => {
-                                const isSelected = !voidAll && selected.has(idx);
-                                return (
-                                    <button
-                                        key={idx}
-                                        onClick={() => toggleItem(idx)}
-                                        className={`w-full flex items-center justify-between gap-2 text-xs p-2 rounded-lg border ${isSelected ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}
-                                    >
-                                        <span className="flex items-center gap-2 font-semibold text-gray-700 text-left">
-                                            {isSelected ? <CheckSquare size={13} className="text-red-500 shrink-0" /> : <Square size={13} className="text-gray-300 shrink-0" />}
-                                            {lineLabel(it)} × {lineQtyPrice(it).qty}
-                                        </span>
-                                        <span className="font-bold text-gray-800 shrink-0">KES {it.lineTotal.toLocaleString()}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        {voidOnlyFull ? (
+                            <p className="text-[11px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2.5 py-2 mb-3">
+                                This bill was given on credit, so it can only be voided in full.
+                            </p>
+                        ) : (
+                            <>
+                                <p className="text-[11px] font-bold text-gray-400 mt-3 mb-1.5">Or select individual items to void:</p>
+                                <div className="space-y-1.5 mb-3 max-h-48 overflow-y-auto">
+                                    {voiding.items.map((it, idx) => {
+                                        const isSelected = !voidAll && selected.has(idx);
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => toggleItem(idx)}
+                                                className={`w-full flex items-center justify-between gap-2 text-xs p-2 rounded-lg border ${isSelected ? 'bg-red-50 border-red-300' : 'bg-white border-gray-200'}`}
+                                            >
+                                                <span className="flex items-center gap-2 font-semibold text-gray-700 text-left">
+                                                    {isSelected ? <CheckSquare size={13} className="text-red-500 shrink-0" /> : <Square size={13} className="text-gray-300 shrink-0" />}
+                                                    {lineLabel(it)} × {lineQtyPrice(it).qty}
+                                                </span>
+                                                <span className="font-bold text-gray-800 shrink-0">KES {it.lineTotal.toLocaleString()}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
 
                         <label className="text-[11px] font-bold text-gray-400 mb-1 block">Reason for void</label>
                         <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
@@ -316,4 +346,4 @@ export default function HistoryModal({ open, onClose, branch }) {
             <PrintReceipt receipt={printReceipt} />
         </div>
     );
-                }
+                        }
