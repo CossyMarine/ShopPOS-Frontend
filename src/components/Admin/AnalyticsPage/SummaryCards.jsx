@@ -7,7 +7,7 @@ export default function SummaryCards({ view, overview }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <StatCard
                 label={view.revenueLabel} value={money(view.revenue)} amount={view.revenue}
-                sub={view.vOn ? `Includes ${money(view.vatCollected)} VAT` : 'What customers paid'}
+                sub={view.vOn ? `Includes ${money(view.vatCollected)} VAT` : 'Everything sold, including bills given on credit'}
             />
             <StatCard label={view.profitLabel} value={money(view.grossProfit)} amount={view.grossProfit} sub="Revenue minus cost of goods" />
 
