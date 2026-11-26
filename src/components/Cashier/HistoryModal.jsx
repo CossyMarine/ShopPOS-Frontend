@@ -3,12 +3,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import {
     X, Search, Eye, Printer, ShieldAlert, ChevronLeft, ChevronRight,
-    ShoppingBag, TrendingUp, Clock, CheckSquare, Square, BookOpen,
+    ShoppingBag, TrendingUp, Clock, CheckSquare, Square, BookOpen, Wallet,
 } from 'lucide-react';
 import API from '../../api/axios';
 import { formatKenyanDateTime } from '../../utils/formatDate';
 import { lineLabel, lineQtyPrice } from '../../utils/packLine';
 import PrintReceipt from '../PrintReceipt';
+import CreditModal from './CreditModal';
 
 const STATUS_STYLE = {
     unpaid: 'bg-amber-100 text-amber-700',
@@ -39,6 +40,10 @@ export default function HistoryModal({ open, onClose, branch }) {
 
     const [printReceipt, setPrintReceipt] = useState(null);
     const [printingId, setPrintingId] = useState(null);
+
+    // Credit modal: open on the customer list, or straight on one customer
+    const [creditOpen, setCreditOpen] = useState(false);
+    const [creditName, setCreditName] = useState(null);
 
     const loadSummary = useCallback(() => {
         API.get('/receipts/summary/today', { params: { branch } })
@@ -80,6 +85,11 @@ export default function HistoryModal({ open, onClose, branch }) {
     const handleSearch = (e) => {
         e.preventDefault();
         loadHistory(1, q);
+    };
+
+    const openCredit = (name = null) => {
+        setCreditName(name);
+        setCreditOpen(true);
     };
 
     const openVoidPanel = (receipt) => {
@@ -144,7 +154,15 @@ export default function HistoryModal({ open, onClose, branch }) {
                     <h3 className="font-black text-base sm:text-lg text-gray-900 flex items-center gap-2">
                         <Clock size={19} className="text-brand-orange" /> Bill History
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => openCredit(null)}
+                            className="flex items-center gap-1.5 text-xs font-extrabold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-lg"
+                        >
+                            <BookOpen size={14} /> My Credit
+                        </button>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>
+                    </div>
                 </div>
 
                 {/* Today's totals */}
@@ -210,6 +228,11 @@ export default function HistoryModal({ open, onClose, branch }) {
                                 <p className="text-[11px] text-gray-500 font-medium">
                                     {formatKenyanDateTime(r.createdAt)} · {r.cashierName || 'Unknown cashier'}
                                 </p>
+                                {r.status === 'credit' && r.creditCustomerName && (
+                                    <p className="text-[11px] font-bold text-rose-600 truncate">
+                                        Credit: {r.creditCustomerName}
+                                    </p>
+                                )}
                                 <div className="flex items-center gap-2 mt-1.5">
                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[r.status] || 'bg-gray-100 text-gray-600'}`}>
                                         {r.status === 'credit' ? 'on credit' : r.status}
@@ -218,6 +241,11 @@ export default function HistoryModal({ open, onClose, branch }) {
                                 </div>
                             </div>
                             <div className="flex flex-col gap-1.5 shrink-0">
+                                {r.status === 'credit' && r.creditCustomerName && (
+                                    <button onClick={() => openCredit(r.creditCustomerName)} className="flex items-center gap-1 text-[11px] font-extrabold text-white bg-green-600 hover:bg-green-700 px-2.5 py-1.5 rounded-lg">
+                                        <Wallet size={12} /> Pay
+                                    </button>
+                                )}
                                 <button onClick={() => setViewing(r)} className="flex items-center gap-1 text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg">
                                     <Eye size={12} /> Items
                                 </button>
@@ -343,7 +371,14 @@ export default function HistoryModal({ open, onClose, branch }) {
                 </div>
             )}
 
+            <CreditModal
+                open={creditOpen}
+                initialName={creditName}
+                onClose={() => setCreditOpen(false)}
+                onChanged={() => { loadSummary(); loadHistory(page, q); }}
+            />
+
             <PrintReceipt receipt={printReceipt} />
         </div>
     );
-                        }
+}
