@@ -58,6 +58,7 @@ export function Attention({ D, rmDue, openRm }) {
       <span className={`font-semibold ${warn ? 'text-accent' : ''}`}>{v}</span>
     </div>
   );
+  const credit = D.credit || { outstanding: 0, outstandingCount: 0 };
   return (
     <div className="dcard p-6">
       <h4 className="font-semibold text-lg">Needs attention</h4>
@@ -69,9 +70,14 @@ export function Attention({ D, rmDue, openRm }) {
         </button>
         <Row l="Payments awaiting confirmation" v={D.pendingPayments} warn={D.pendingPayments > 0} />
         <Row l="Void requests pending" v={D.pendingVoids} warn={D.pendingVoids > 0} />
+        <Row
+          l={`Credit owed by customers${credit.outstandingCount ? ` (${credit.outstandingCount})` : ''}`}
+          v={money(credit.outstanding)}
+          warn={credit.outstanding > 0}
+        />
         <Row l={`Idle stock, 30+ days (${D.dead.items.length})`} v={money(D.dead.totalValueTiedUp)} />
         <Row l="Estimated next payroll" v={money(D.nextPayroll)} />
       </div>
     </div>
   );
-}
+                                          }
