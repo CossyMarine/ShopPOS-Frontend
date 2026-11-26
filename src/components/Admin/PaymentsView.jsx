@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { io } from 'socket.io-client';
+import { createSocket } from '../../lib/socket';
 import {
     RefreshCw, Search, ChevronLeft, ChevronRight, Landmark, Smartphone,
     Wallet, Gift, Layers, CheckCircle2, XCircle, Eye, Clock, BookOpen,
@@ -12,7 +12,6 @@ import { PaymentSummaryCards } from './PaymentSummaryCards';
 import { PaymentFilters } from './PaymentFilters';
 import CreditRecordsTab from './CreditRecordsTab';
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 const METHOD_META = {
     cash:          { label: 'Cash',        icon: Wallet,     color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
@@ -136,7 +135,7 @@ export default function PaymentsView({ onPendingChange }) {
     }, [fetchSummary]);
 
     useEffect(() => {
-        const socket = io(SOCKET_URL);
+        const socket = createSocket();
         socket.on('receipt:manualPending', () => fetchPending());
         socket.on('receipt:manualPaymentResolved', () => fetchPending());
         socket.on('receipt:paid', () => { fetchTransactions(1); fetchSummary(); });
