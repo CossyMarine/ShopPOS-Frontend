@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { io } from 'socket.io-client';
+import { createSocket } from '../../lib/socket';
 import { Search, Eye, HandCoins, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
 import PaymentDetailsModal from './PaymentDetailsModal';
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 const STATUS_STYLE = {
     open:    'text-rose-600 bg-rose-50 border-rose-200',
@@ -68,7 +67,7 @@ export default function CreditRecordsTab({ onChanged }) {
     }, [fetchRows]);
 
     useEffect(() => {
-        const socket = io(SOCKET_URL);
+        const socket = createSocket();
         const refresh = () => { fetchRows(1); fetchSummary(); };
         socket.on('credit:created', refresh);
         socket.on('credit:updated', refresh);
