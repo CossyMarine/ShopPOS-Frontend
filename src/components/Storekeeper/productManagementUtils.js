@@ -47,7 +47,7 @@ export const statusOf = (p) => {
 
 export const EMPTY_UNIT = { name: '', abbreviation: '' };
 
-export const STORE_NAME = 'Chemalug Mugundoi Supermarket';
+export const STORE_NAME = 'Chemaluk Mugundoi Supermarket';
 
 // profit per single unit at average cost (null if never received)
 export const unitProfit = (p) => {
