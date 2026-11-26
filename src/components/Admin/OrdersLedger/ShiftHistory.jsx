@@ -67,7 +67,7 @@ const PAY_TILES = [
     { key: 'reward', label: 'Reward', dot: 'bg-purple-500' },
 ];
 
-function PayTile({ label, value, dot }) {
+function PayTile({ label, value, dot, hint }) {
     return (
         <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5">
             <div className="flex items-center gap-1.5">
@@ -75,6 +75,7 @@ function PayTile({ label, value, dot }) {
                 <p className="text-xs font-semibold text-gray-600">{label}</p>
             </div>
             <p className="mt-1 text-base font-extrabold text-gray-900 tabular-nums">{fmt(value)}</p>
+            {hint && <p className="text-[10px] text-gray-400 mt-0.5">{hint}</p>}
         </div>
     );
 }
@@ -82,6 +83,7 @@ function PayTile({ label, value, dot }) {
 function ShiftCard({ s }) {
     const closed = s.status === 'closed' || !!s.closedAt;
     const hasCount = s.cashCounted !== null && s.cashCounted !== undefined;
+    const hasCredit = (s.creditGiven || 0) > 0 || (s.creditCollected || 0) > 0;
 
     return (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-md shadow-gray-200/70 hover:shadow-lg hover:shadow-gray-300/60 transition-shadow p-5 space-y-4">
@@ -108,6 +110,7 @@ function ShiftCard({ s }) {
                         <span className="text-sm font-bold text-gray-500 mr-1">KES</span>
                         {fmt(s.totalSales)}
                     </p>
+                    {hasCredit && <p className="text-[10px] text-gray-400">includes credit given</p>}
                 </div>
             </div>
 
@@ -133,6 +136,14 @@ function ShiftCard({ s }) {
                     <PayTile key={t.key} label={t.label} value={s[t.key]} dot={t.dot} />
                 ))}
             </div>
+
+            {/* Credit — given is a sale but not cash; paid back is already inside cash/till above */}
+            {hasCredit && (
+                <div className="grid grid-cols-2 gap-3">
+                    <PayTile label="On credit" value={s.creditGiven} dot="bg-rose-500" hint="Sold, not cash" />
+                    <PayTile label="Credit paid back" value={s.creditCollected} dot="bg-teal-500" hint="Already in cash/till above" />
+                </div>
+            )}
 
             {/* Cash reconciliation (only when a count was recorded) */}
             {hasCount && (
@@ -211,8 +222,10 @@ export default function ShiftHistory({ branch }) {
                     till: a.till + (s.till || 0),
                     mpesa: a.mpesa + (s.mpesa || 0),
                     reward: a.reward + (s.reward || 0),
+                    creditGiven: a.creditGiven + (s.creditGiven || 0),
+                    creditCollected: a.creditCollected + (s.creditCollected || 0),
                 }),
-                { sales: 0, cash: 0, till: 0, mpesa: 0, reward: 0 }
+                { sales: 0, cash: 0, till: 0, mpesa: 0, reward: 0, creditGiven: 0, creditCollected: 0 }
             ),
         [rows]
     );
@@ -261,6 +274,9 @@ export default function ShiftHistory({ branch }) {
                                 <span className="text-base font-bold text-gray-300 mr-1">KES</span>
                                 {fmt(totals.sales)}
                             </p>
+                            {(totals.creditGiven > 0 || totals.creditCollected > 0) && (
+                                <p className="text-[11px] text-gray-400 mt-1">Includes credit given</p>
+                            )}
                         </div>
                         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                             {[
@@ -268,6 +284,8 @@ export default function ShiftHistory({ branch }) {
                                 ['Till', totals.till],
                                 ['M-Pesa', totals.mpesa],
                                 ['Reward', totals.reward],
+                                ...(totals.creditGiven > 0 ? [['On credit', totals.creditGiven]] : []),
+                                ...(totals.creditCollected > 0 ? [['Credit paid back', totals.creditCollected]] : []),
                             ].map(([label, v]) => (
                                 <div key={label}>
                                     <p className="text-xs font-semibold text-gray-300">{label}</p>
@@ -316,4 +334,4 @@ export default function ShiftHistory({ branch }) {
             )}
         </div>
     );
-            }
+                 }
