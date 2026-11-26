@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { io } from 'socket.io-client';
-import { toast } from 'react-toastify';
+import { createSocket } from '../../lib/socket';import { toast } from 'react-toastify';
 import { ArrowRightLeft, Plus, RefreshCw, Truck, PackageCheck, XCircle, Store } from 'lucide-react';
 import API from '../../api/axios';
 import { useAuth } from '../../hooks/useAuth';
@@ -9,7 +8,6 @@ import ConfirmDialog from './ConfirmDialog';
 import NewTransferModal from './NewTransferModal';
 import ReceiveTransferModal from './ReceiveTransferModal';
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 const STATUS_STYLE = {
     draft: 'bg-gray-100 text-gray-600',
@@ -60,7 +58,7 @@ export default function StockTransfers({ branch }) {
     // Live refresh when either side of a transfer dispatches/receives/cancels
     useEffect(() => {
         if (!effectiveBranch) return;
-        const socket = io(SOCKET_URL);
+        const socket = createSocket();
         socket.emit('join_room', `branch:${effectiveBranch}`);
         const refresh = () => fetchTransfers();
         socket.on('stockTransfer:created', refresh);
