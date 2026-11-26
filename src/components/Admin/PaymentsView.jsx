@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import {
     RefreshCw, Search, ChevronLeft, ChevronRight, Landmark, Smartphone,
-    Wallet, Gift, Layers, CheckCircle2, XCircle, Eye, Clock,
+    Wallet, Gift, Layers, CheckCircle2, XCircle, Eye, Clock, BookOpen,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../api/axios';
@@ -23,7 +23,7 @@ const METHOD_META = {
     manual_till:   { label: 'Manual Till', icon: Landmark,   color: 'text-amber-600 bg-amber-50 border-amber-200' },
     reward:        { label: 'Reward',      icon: Gift,       color: 'text-pink-600 bg-pink-50 border-pink-200' },
     both:          { label: 'Split',       icon: Layers,     color: 'text-slate-600 bg-slate-100 border-slate-200' },
-    credit:        { label: 'Credit',      icon: Wallet,     color: 'text-rose-600 bg-rose-50 border-rose-200' },
+    credit:        { label: 'Credit',      icon: BookOpen,   color: 'text-rose-600 bg-rose-50 border-rose-200' },
 };
 
 function MethodPill({ method }) {
@@ -141,6 +141,8 @@ export default function PaymentsView({ onPendingChange }) {
         socket.on('receipt:manualPaymentResolved', () => fetchPending());
         socket.on('receipt:paid', () => { fetchTransactions(1); fetchSummary(); });
         socket.on('receipt:updated', () => { fetchTransactions(1); fetchSummary(); });
+        socket.on('credit:created', () => { fetchTransactions(1); fetchSummary(); });
+        socket.on('credit:updated', () => { fetchTransactions(1); fetchSummary(); });
         return () => socket.disconnect();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -261,6 +263,7 @@ export default function PaymentsView({ onPendingChange }) {
                             <option value="mpesa_stk">STK Push</option>
                             <option value="manual_till">Manual Till</option>
                             <option value="reward">Reward</option>
+                            <option value="credit">Credit (given)</option>
                             <option value="both">Split</option>
                         </select>
                         {(search || methodFilter) && (
@@ -294,25 +297,38 @@ export default function PaymentsView({ onPendingChange }) {
                                     ) : transactions.length === 0 ? (
                                         <tr><td colSpan={8} className="p-10 text-center text-gray-400 font-medium">No transactions found</td></tr>
                                     ) : (
-                                        transactions.map((t) => (
-                                            <tr key={`${t.receiptId}-${t.paymentId}`} className="hover:bg-gray-50/70 transition-colors">
-                                                <td className="p-3 font-bold text-orange-500">{t.billId}</td>
-                                                <td className="p-3 font-semibold text-gray-800">Table {t.branch?.name}</td>
-                                                <td className="p-3"><MethodPill method={t.method} /></td>
-                                                <td className="p-3 font-medium">{t.payerName || t.cashierName || 'Walk-in'}</td>
-                                                <td className="p-3 text-xs text-gray-500">{t.reference || '—'}</td>
-                                                <td className="p-3 text-right font-bold text-gray-800">KES {Number(t.amount).toLocaleString()}</td>
-                                                <td className="p-3 text-xs text-gray-400">{new Date(t.paidAt).toLocaleString()}</td>
-                                                <td className="p-3 text-right">
-                                                    <button
-                                                        onClick={() => openViewer(t.receiptId)}
-                                                        className="inline-flex items-center gap-1 text-gray-400 hover:text-orange-500 text-xs font-semibold transition-colors"
-                                                    >
-                                                        <Eye size={14} /> View
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
+                                        transactions.map((t) => {
+                                            const isCredit = t.method === 'credit';
+                                            return (
+                                                <tr
+                                                    key={`${t.receiptId}-${t.paymentId}`}
+                                                    className={`transition-colors ${isCredit ? 'bg-rose-50/30 hover:bg-rose-50/60' : 'hover:bg-gray-50/70'}`}
+                                                >
+                                                    <td className="p-3 font-bold text-orange-500">{t.billId}</td>
+                                                    <td className="p-3 font-semibold text-gray-800">Table {t.branch?.name}</td>
+                                                    <td className="p-3"><MethodPill method={t.method} /></td>
+                                                    <td className="p-3 font-medium">{t.payerName || t.cashierName || 'Walk-in'}</td>
+                                                    <td className="p-3 text-xs text-gray-500">{t.reference || '—'}</td>
+                                                    <td className="p-3 text-right">
+                                                        <span className={`font-bold ${isCredit ? 'text-rose-600' : 'text-gray-800'}`}>
+                                                            KES {Number(t.amount).toLocaleString()}
+                                                        </span>
+                                                        {isCredit && (
+                                                            <span className="block text-[10px] font-semibold text-rose-400">given on credit · not cash</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 text-xs text-gray-400">{new Date(t.paidAt).toLocaleString()}</td>
+                                                    <td className="p-3 text-right">
+                                                        <button
+                                                            onClick={() => openViewer(t.receiptId)}
+                                                            className="inline-flex items-center gap-1 text-gray-400 hover:text-orange-500 text-xs font-semibold transition-colors"
+                                                        >
+                                                            <Eye size={14} /> View
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
@@ -428,4 +444,4 @@ export default function PaymentsView({ onPendingChange }) {
             />
         </div>
     );
-        }
+            }
