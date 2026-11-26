@@ -5,7 +5,7 @@ export default function TillCheck({ till }) {
     return (
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
             <h2 className="text-sm font-extrabold text-gray-900">Till Check, Closed Shifts</h2>
-            <p className="text-xs text-gray-500">Expected cash = opening float + cash sales - petty cash. Counted cash is what the cashier entered when closing the shift.</p>
+            <p className="text-xs text-gray-500">Expected cash = opening float + cash sales - petty cash. Counted cash is what the cashier entered when closing the shift. Bills given on credit are not cash; cash paid back on credit only counts if it was received before the shift closed.</p>
             {rows.length === 0 ? (
                 <p className="text-xs text-gray-400 mt-3">No closed shifts in this range.</p>
             ) : (
