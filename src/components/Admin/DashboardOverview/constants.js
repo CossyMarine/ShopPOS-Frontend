@@ -5,6 +5,8 @@ export const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:500
 export const LIVE_EVENTS = [
   // sales
   'receipt:paid', 'receipt:updated', 'receipt:manualPending', 'receipt:manualPaymentResolved', 'sale:created',
+  // credit given / settled
+  'credit:created', 'credit:updated',
   // voids
   'receipt:voided', 'voidRequest:created', 'voidRequest:approved', 'voidRequest:rejected',
   // stock
