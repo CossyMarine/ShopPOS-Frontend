@@ -1,14 +1,12 @@
 // src/components/Admin/OrdersLedger/index.jsx
 import { useState, useEffect, useCallback } from 'react';
-import { io } from 'socket.io-client';
-import { RefreshCw } from 'lucide-react';
+import { createSocket } from '../../../lib/socket';import { RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../../api/axios';
 import { lineLabel, lineQtyPrice } from '../../../utils/packLine';
 import { receiptPaymentInfo } from '../../../utils/dashboardHelpers';
 import ViewItemsModal from '../ViewItemsModal';
 import CreditRecordsTab from '../CreditRecordsTab';
-
 import SummaryCards from './SummaryCards';
 import TabsBar from './TabsBar';
 import HistoryFilters from './HistoryFilters';
@@ -18,7 +16,6 @@ import ShiftHistory from './ShiftHistory';
 import DailySales from './DailySales';
 import useDailySales from './useDailySales';
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 export default function OrdersLedger({ branch } = {}) {
     const [tab, setTab] = useState('unpaid');
@@ -140,7 +137,7 @@ export default function OrdersLedger({ branch } = {}) {
     }, [tab, search, dateFrom, dateTo]);
 
     useEffect(() => {
-        const socket = io(SOCKET_URL);
+        const socket = createSocket();
         if (branch) socket.emit('join_room', `branch:${branch}`);
 
         socket.on('receipt:paid', () => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); setTick((t) => t + 1); });
