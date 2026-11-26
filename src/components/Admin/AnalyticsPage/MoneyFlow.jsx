@@ -4,11 +4,11 @@ export default function MoneyFlow({ view }) {
     const paid = view.revenue || 1;
     const rows = [];
     if (view.vatShare) {
-        rows.push(['Customers paid', view.revenue, 'total', 'Everything customers handed over, VAT included.']);
+        rows.push(['Sales (incl. VAT)', view.revenue, 'total', 'Everything sold, VAT included. Bills given on credit count from the day they were given.']);
         rows.push(['VAT collected', view.vatCollected, 'minus', 'Belongs to the tax authority. Removed from profit.']);
         rows.push(['Net sales', view.netSales, 'total', 'Your real sales.']);
     } else {
-        rows.push([view.vOn ? 'Customers paid' : 'Revenue', view.revenue, 'total', view.vOn ? 'VAT is kept inside profit in this view.' : 'What customers paid.']);
+        rows.push([view.vOn ? 'Sales (incl. VAT)' : 'Revenue', view.revenue, 'total', view.vOn ? 'VAT is kept inside profit in this view. Credit sales are included.' : 'Everything sold, including bills given on credit.']);
     }
     rows.push(['Cost of goods', view.cost, 'minus', 'What you paid suppliers for the items sold.']);
     rows.push(['Gross profit', view.grossProfit, 'total', 'What is left after paying for the stock.']);
