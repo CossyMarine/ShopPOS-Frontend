@@ -3,6 +3,10 @@ import { X } from 'lucide-react';
 export default function ViewItemsModal({ open, onClose, title, subtitle, items = [], total, payment }) {
     if (!open) return null;
 
+    // On a credit bill that is still owing, cash/till figures are part-payments paid back so far
+    const isCreditMethod = payment?.method === 'credit';
+    const paidBackSoFar = Number(payment?.cashAmount || 0) + Number(payment?.tillAmount || 0);
+
     return (
         <div
             className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4"
@@ -54,6 +58,23 @@ export default function ViewItemsModal({ open, onClose, title, subtitle, items =
                             Payment Details
                         </p>
 
+                        {payment.onCredit && (
+                            <>
+                                <PaymentRow
+                                    label="Given on credit"
+                                    value={`KES ${Number(payment.creditAmount || 0).toLocaleString()}`}
+                                    rose
+                                />
+                                {payment.balance > 0 && (
+                                    <PaymentRow
+                                        label="Still owing"
+                                        value={`KES ${Number(payment.balance).toLocaleString()}`}
+                                        rose
+                                    />
+                                )}
+                            </>
+                        )}
+
                         {payment.method === 'cash' && (
                             <>
                                 <PaymentRow label="Cash" value={`KES ${Number(payment.cashAmount || 0).toLocaleString()}`} />
@@ -74,12 +95,26 @@ export default function ViewItemsModal({ open, onClose, title, subtitle, items =
                             </>
                         )}
 
+                        {isCreditMethod && paidBackSoFar > 0 && (
+                            <>
+                                {Number(payment.cashAmount) > 0 && (
+                                    <PaymentRow label="Paid back in cash" value={`KES ${Number(payment.cashAmount).toLocaleString()}`} />
+                                )}
+                                {Number(payment.tillAmount) > 0 && (
+                                    <PaymentRow label="Paid back by till" value={`KES ${Number(payment.tillAmount).toLocaleString()}`} />
+                                )}
+                            </>
+                        )}
+
                         {payment.mpesaReceiptNumber && (
                             <PaymentRow label="M-Pesa Ref" value={payment.mpesaReceiptNumber} />
                         )}
 
                         {payment.paidAt && (
-                            <PaymentRow label="Time Paid" value={new Date(payment.paidAt).toLocaleString()} />
+                            <PaymentRow
+                                label={isCreditMethod ? 'Time Given' : 'Time Paid'}
+                                value={new Date(payment.paidAt).toLocaleString()}
+                            />
                         )}
                     </div>
                 )}
@@ -88,11 +123,11 @@ export default function ViewItemsModal({ open, onClose, title, subtitle, items =
     );
 }
 
-function PaymentRow({ label, value, accent }) {
+function PaymentRow({ label, value, accent, rose }) {
     return (
         <div className="flex justify-between items-center text-sm">
             <span className="text-gray-500">{label}</span>
-            <span className={`font-bold ${accent ? 'text-emerald-600' : 'text-gray-900'}`}>{value}</span>
+            <span className={`font-bold ${accent ? 'text-emerald-600' : rose ? 'text-rose-600' : 'text-gray-900'}`}>{value}</span>
         </div>
     );
 }
