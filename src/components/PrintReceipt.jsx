@@ -10,7 +10,11 @@ export default function PrintReceipt({ receipt }) {
     // Bills given on credit carry a "credit" entry in payments[] (the sale, not money received)
     const creditEntry = (receipt.payments || []).find((p) => p.method === 'credit');
     const onCredit = receipt.status === 'credit' || !!creditEntry;
-    const creditCustomer = (creditEntry?.reference || '').replace(/^Credit\s*—\s*/, '');
+    // Prefer the name stored on the receipt; fall back to the payment reference for older bills
+    const creditCustomer =
+        receipt.creditCustomerName ||
+        (creditEntry?.reference || '').replace(/^Credit\s*—\s*/, '');
+    const creditPhone = receipt.creditCustomerPhone || '';
     const paidSoFar = Number((receipt.amountPaid || 0).toFixed(2));
     const balanceOwed = receipt.status === 'credit'
         ? Math.max(0, Number(((receipt.totalDue ?? receipt.subtotal) - paidSoFar).toFixed(2)))
@@ -28,6 +32,8 @@ export default function PrintReceipt({ receipt }) {
 
             <p>Receipt No : {receipt.billId}</p>
             <p>Cashier    : {receipt.cashierName}</p>
+            {onCredit && creditCustomer && <p>Customer   : {creditCustomer}</p>}
+            {onCredit && creditPhone && <p>Phone      : {creditPhone}</p>}
             <p>Date       : {dateStr}</p>
             <p>Time       : {timeStr}</p>
 
@@ -100,4 +106,4 @@ export default function PrintReceipt({ receipt }) {
             </div>
         </div>
     );
-                          }
+}
