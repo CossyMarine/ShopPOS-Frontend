@@ -71,10 +71,13 @@ export default function DailySales({
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="p-4 pb-2">
           <h2 className="text-sm font-extrabold text-gray-900">{monthly ? 'Monthly Sales' : 'Daily Sales'}</h2>
-          {!monthly && <p className="text-xs text-gray-500">Tap a day to see its receipts.</p>}
+          <p className="text-xs text-gray-500">
+            Includes bills given on credit, counted on the day they were given.
+            {!monthly && ' Tap a day to see its receipts.'}
+          </p>
         </div>
         {rows.length === 0 ? (
-          <p className="px-4 pb-4 text-xs text-gray-400">No paid sales in this period.</p>
+          <p className="px-4 pb-4 text-xs text-gray-400">No sales in this period.</p>
         ) : (
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-xs">
@@ -114,4 +117,4 @@ export default function DailySales({
       </div>
     </div>
   );
-}
+          }
