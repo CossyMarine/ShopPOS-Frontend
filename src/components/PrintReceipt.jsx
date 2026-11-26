@@ -24,7 +24,7 @@ export default function PrintReceipt({ receipt }) {
         <div id="print-receipt" className="hidden print:block font-mono text-black bg-white p-4 w-72 text-sm">
             <div className="text-center mb-2">
                 <p>=====================================</p>
-                <p className="font-bold">CHEMALUG MUGUNDOI SUPERMARKET</p>
+                <p className="font-bold">CHEMALUK MUGUNDOI SUPERMARKET</p>
                 <p>{receipt.branch?.name || ''}</p>
                 <p>SALES RECEIPT</p>
                 <p>=====================================</p>
