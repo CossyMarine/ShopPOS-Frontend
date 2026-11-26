@@ -1,4 +1,4 @@
-export const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+export { SOCKET_URL } from '../../../lib/socket';
 
 // Anything that changes a number on this screen. Refreshes are debounced, so a
 // burst of events (e.g. several product:updated from one sale) costs one load.
