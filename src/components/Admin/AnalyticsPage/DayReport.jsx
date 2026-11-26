@@ -49,6 +49,12 @@ export default function DayReport({ date, branch }) {
                             {d.vatOn ? ' Figures here are before VAT.' : ''}
                         </p>
 
+                        {d.creditGiven > 0 && (
+                            <div className="mt-3 text-xs rounded-lg bg-rose-50 text-rose-800 p-3">
+                                {money(d.creditGiven)} of this day's sales ({d.creditCount} bill{d.creditCount > 1 ? 's' : ''}) was given on credit. It counts as sold on this day, but the money has not come in yet.
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
                             {[['Profit from selling goods', d.grossProfit, ''], ['minus Stock losses', d.stockLoss, ''], ['minus Petty cash', d.pettyCash, ''], ['equals Result', d.result, loss ? 'text-red-600' : 'text-emerald-600']].map(([l, v, c]) => (
                                 <div key={l} className="rounded-lg bg-gray-50 p-3"><p className="text-[11px] text-gray-500">{l}</p><p className={`font-extrabold mt-1 ${c}`}>{money(v)}</p></div>
@@ -120,4 +126,4 @@ export default function DayReport({ date, branch }) {
             })()}
         </div>
     );
-}
+                        }
