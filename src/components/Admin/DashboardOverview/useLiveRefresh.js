@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
-import { SOCKET_URL, LIVE_EVENTS } from './constants';
+import { createSocket } from '../../../lib/socket';
+import { LIVE_EVENTS } from './constants';
 
 /* Live refresh for the dashboard.
 
    One socket for the life of the screen. `load` and `delayMs` are read
    through refs, so changing the range never tears the connection down.
-   Plain io(SOCKET_URL) with no withCredentials — the socket doesn't use
-   cookies, and the server's CORS doesn't send Allow-Credentials.
+   createSocket() authenticates with a short-lived ticket (no cookies), and the
+   server only lets it join its own branch room (Super Admin: any branch).
 
    delayMs is the debounce before a burst of events triggers one reload.
    The heavy ranges (This Year / All) pass a longer delay.
@@ -23,7 +23,7 @@ export default function useLiveRefresh(load, branch, branches, delayMs = 1500) {
   const roomsRef = useRef([]);
 
   useEffect(() => {
-    const sock = io(SOCKET_URL);
+    const sock = createSocket();
     sockRef.current = sock;
 
     // The server forgets rooms when a socket drops, so re-join on every (re)connect
