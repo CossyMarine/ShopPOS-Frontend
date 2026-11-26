@@ -8,7 +8,7 @@ export default function StaffAccountability({ params }) {
     return (
         <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
             <h2 className="text-sm font-extrabold text-gray-900">Staff Accountability</h2>
-            <p className="text-xs text-gray-500">A staff member whose voids or loss reports are far above the others deserves a conversation, not an assumption.</p>
+            <p className="text-xs text-gray-500">A staff member whose voids or loss reports are far above the others deserves a conversation, not an assumption. Sales include bills given on credit; the "On credit" column shows how much of that each person gave out.</p>
             {error && <p className="text-xs text-red-600 font-bold mt-2">{error}</p>}
             {!data && loading && <p className="text-xs text-gray-400 mt-3">Loading…</p>}
             {data && rows.length === 0 && <p className="text-xs text-gray-400 mt-3">No staff activity in this range.</p>}
@@ -16,7 +16,7 @@ export default function StaffAccountability({ params }) {
                 <div className="overflow-x-auto mt-3">
                     <table className="w-full text-left text-xs">
                         <thead><tr className="text-[10px] font-black uppercase text-gray-400 tracking-wider border-b border-gray-100">
-                            <th className="py-2 pr-3">Staff</th><th className="py-2 pr-3 text-right">Sales</th><th className="py-2 pr-3 text-right">Voids</th><th className="py-2 pr-3 text-right">Void rate</th><th className="py-2 pr-3 text-right">Loss reports</th><th className="py-2" />
+                            <th className="py-2 pr-3">Staff</th><th className="py-2 pr-3 text-right">Sales</th><th className="py-2 pr-3 text-right">On credit</th><th className="py-2 pr-3 text-right">Voids</th><th className="py-2 pr-3 text-right">Void rate</th><th className="py-2 pr-3 text-right">Loss reports</th><th className="py-2" />
                         </tr></thead>
                         <tbody className="divide-y divide-gray-50">
                             {rows.map((r) => {
@@ -26,6 +26,7 @@ export default function StaffAccountability({ params }) {
                                     <tr key={r.name}>
                                         <td className="py-2 pr-3 font-semibold text-gray-800">{r.name}</td>
                                         <td className="py-2 pr-3 text-right font-mono">{money(r.sales)}</td>
+                                        <td className={`py-2 pr-3 text-right font-mono ${r.creditGiven > 0 ? 'text-rose-600 font-bold' : 'text-gray-400'}`}>{r.creditGiven > 0 ? money(r.creditGiven) : '-'}</td>
                                         <td className="py-2 pr-3 text-right font-mono">{r.voidCount} ({money(r.voidAmount)})</td>
                                         <td className="py-2 pr-3 text-right font-mono">{rate.toFixed(2)}%</td>
                                         <td className="py-2 pr-3 text-right font-mono">{r.lossReports} ({money(r.lossCost)})</td>
