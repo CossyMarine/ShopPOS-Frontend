@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { io } from "socket.io-client";
+import { createSocket } from '../lib/socket';
 import { toast } from "react-toastify";
 import { useNavigate, Link } from "react-router-dom";
 import {
@@ -20,7 +20,6 @@ import { useAuth } from "../hooks/useAuth";
 import API from "../api/axios";
 import { lineLabel, lineQtyPrice } from "../utils/packLine";
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/api\/?$/, "");
 
 const STATUS_STYLE = {
   unpaid: "bg-amber-100 text-amber-700",
@@ -93,7 +92,7 @@ export default function OrdersPage() {
   // Live-refresh when a bill of ours changes (paid, partially paid, etc.)
   useEffect(() => {
     if (!user) return;
-    const socket = io(SOCKET_URL);
+    const socket = createSocket();
     socket.on("receipt:paid", (receipt) => {
       if (String(receipt.customer) === String(user.id)) loadBills(page);
     });
