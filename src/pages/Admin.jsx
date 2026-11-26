@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
-import { toast } from 'react-toastify';
+import { createSocket } from '../lib/socket';import { toast } from 'react-toastify';
 import { Menu } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import useStoreInfo from '../hooks/useStoreInfo';
@@ -25,7 +24,6 @@ import StockAdjustmentsView from '../components/Admin/StockAdjustmentsView';
 import StockTransfers from '../components/Storekeeper/StockTransfers';
 import PricingPromotions from '../components/Admin/PricingPromotions';
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
 const VIEWS = {
     dashboard: DashboardOverview,
@@ -75,7 +73,7 @@ function AdminInner() {
     }, [fetchPendingCount]);
 
     useEffect(() => {
-        const socket = io(SOCKET_URL);
+        const socket = createSocket();
         if (selectedBranch) socket.emit('join_room', `branch:${selectedBranch}`);
 
         socket.on('receipt:manualPending', (payload) => {
