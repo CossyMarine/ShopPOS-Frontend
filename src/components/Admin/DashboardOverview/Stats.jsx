@@ -34,14 +34,22 @@ function KCard({ label, value, color, delta, vals, foot }) {
 
 export default function Stats({ D, M }) {
   const vs = D.period.cmp ? `vs ${D.period.cmp}` : 'All recorded sales', dl = D.deltas, t = D.totals, s = D.series.cur;
+  const onCredit = D.credit?.given || 0;
   return (
     <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-      <KCard label="Total revenue" value={money(t.revenue)} color={M.sales} delta={dl.revenue} vals={s.revenue} foot={vs} />
-      <KCard label="Customers served" value={num(t.customers)} color={M.customers} delta={dl.customers} vals={s.customers} foot={`One per paid receipt | ${vs}`} />
+      <KCard
+        label="Total revenue"
+        value={money(t.revenue)}
+        color={M.sales}
+        delta={dl.revenue}
+        vals={s.revenue}
+        foot={onCredit > 0 ? `${vs} | ${money(onCredit)} of it on credit` : vs}
+      />
+      <KCard label="Customers served" value={num(t.customers)} color={M.customers} delta={dl.customers} vals={s.customers} foot={`One per sale | ${vs}`} />
       <KCard label="Net profit (est.)" value={money(t.profit)} color={M.profit} delta={dl.profit} vals={s.profit} foot={`${t.marginPct.toFixed(1)}% margin`} />
       <KCard label="Average basket" value={money(t.avgBasket)} color={M.sales} foot="Revenue per customer" />
       <KCard label="Refunds and voids" value={money(D.voided.amount)} color="#ef4444" foot={`${D.voided.count} voided today, ${D.pendingVoids} pending`} />
       <KCard label="Low stock" value={`${D.lowStock.count} products`} color="#f59e0b" foot="At or below reorder level" />
     </section>
   );
-}
+                                                             }
