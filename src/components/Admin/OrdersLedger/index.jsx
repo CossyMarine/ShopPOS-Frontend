@@ -5,7 +5,9 @@ import { RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../../../api/axios';
 import { lineLabel, lineQtyPrice } from '../../../utils/packLine';
+import { receiptPaymentInfo } from '../../../utils/dashboardHelpers';
 import ViewItemsModal from '../ViewItemsModal';
+import CreditRecordsTab from '../CreditRecordsTab';
 
 import SummaryCards from './SummaryCards';
 import TabsBar from './TabsBar';
@@ -13,8 +15,8 @@ import HistoryFilters from './HistoryFilters';
 import OrdersTable from './OrdersTable';
 import ComboPayModal from './ComboPayModal';
 import ShiftHistory from './ShiftHistory';
-import DailySales from './DailySales';           // NEW
-import useDailySales from './useDailySales';     // NEW
+import DailySales from './DailySales';
+import useDailySales from './useDailySales';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
@@ -38,9 +40,13 @@ export default function OrdersLedger({ branch } = {}) {
     const [search, setSearch] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
-    const [summary, setSummary] = useState({ paidToday: 0, paidTodayCount: 0, unpaidToday: 0, unpaidTodayCount: 0 });
+    const [summary, setSummary] = useState({
+        paidToday: 0, paidTodayCount: 0,
+        creditToday: 0, creditTodayCount: 0,
+        unpaidToday: 0, unpaidTodayCount: 0,
+    });
 
-    // ---- NEW: Daily Sales (period dropdown, default Last Month) ----
+    // ---- Daily Sales (period dropdown, default Last Month) ----
     const [range, setRange] = useState('last_month');
     const [pFrom, setPFrom] = useState('');
     const [pTo, setPTo] = useState('');
@@ -137,8 +143,12 @@ export default function OrdersLedger({ branch } = {}) {
         const socket = io(SOCKET_URL);
         if (branch) socket.emit('join_room', `branch:${branch}`);
 
-        socket.on('receipt:paid', () => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); setTick((t) => t + 1); }); // NEW: tick
+        socket.on('receipt:paid', () => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); setTick((t) => t + 1); });
         socket.on('receipt:updated', () => { fetchData(); fetchPendingOnline(); fetchAllReceipts(allPage); });
+        // Credit given / settled — changes today's totals, the sales figures and the bill statuses
+        const onCredit = () => { fetchData(); fetchSummary(); fetchAllReceipts(allPage); setTick((t) => t + 1); };
+        socket.on('credit:created', onCredit);
+        socket.on('credit:updated', onCredit);
         socket.on('sale:created', ({ order } = {}) => {
             fetchData();
             fetchSummary();
@@ -162,21 +172,28 @@ export default function OrdersLedger({ branch } = {}) {
         if (status === 'paid') return 'bg-emerald-50/40 hover:bg-emerald-50/70';
         if (status === 'voided') return 'bg-red-50/40 hover:bg-red-50/70';
         if (status === 'partial') return 'bg-blue-50/40 hover:bg-blue-50/70';
+        if (status === 'credit') return 'bg-rose-50/40 hover:bg-rose-50/70';
         return 'bg-amber-50/40 hover:bg-amber-50/70';
     };
 
-    const paymentInfo = (r) =>
-        r.status === 'paid' || r.status === 'partial'
-            ? {
-                  method: r.paymentMethod,
-                  cashAmount: r.cashAmount,
-                  tillAmount: r.tillAmount,
-                  amountPaid: r.amountPaid,
-                  changeGiven: r.changeGiven,
-                  mpesaReceiptNumber: r.mpesaReceiptNumber,
-                  paidAt: r.paidAt,
-              }
-            : null;
+    // Paid and credit bills share the helper used by the dashboard (it also
+    // handles the credit given / still owing / time paid details).
+    const paymentInfo = (r) => {
+        const info = receiptPaymentInfo(r);
+        if (info) return info;
+        if (r.status === 'partial') {
+            return {
+                method: r.paymentMethod,
+                cashAmount: r.cashAmount,
+                tillAmount: r.tillAmount,
+                amountPaid: r.amountPaid,
+                changeGiven: r.changeGiven,
+                mpesaReceiptNumber: r.mpesaReceiptNumber,
+                paidAt: r.paidAt,
+            };
+        }
+        return null;
+    };
 
     const rows = tab === 'unpaid'
         ? unpaid
@@ -187,13 +204,14 @@ export default function OrdersLedger({ branch } = {}) {
         : allReceipts;
 
     const isShifts = tab === 'shifts';
+    const isCredit = tab === 'credit';
 
     const refreshAll = () => {
         fetchData();
         fetchSummary();
         fetchPendingOnline();
         fetchAllReceipts(allPage);
-        setTick((t) => t + 1); // NEW: reload Daily Sales too
+        setTick((t) => t + 1); // reload Daily Sales too
     };
 
     return (
@@ -204,7 +222,7 @@ export default function OrdersLedger({ branch } = {}) {
                     <p className="text-sm text-gray-500">
                         {isShifts
                             ? 'Cashier shifts, sales totals and cash reconciliation'
-                            : 'Daily sales, unpaid bills, payment history and shifts'}
+                            : 'Daily sales, unpaid bills, credit, payment history and shifts'}
                     </p>
                 </div>
                 <button
@@ -216,7 +234,7 @@ export default function OrdersLedger({ branch } = {}) {
                 </button>
             </div>
 
-            {/* NEW: Daily Sales first (period dropdown, totals, day-by-day table) */}
+            {/* Daily Sales first (period dropdown, totals, day-by-day table) */}
             {!isShifts && (
                 <DailySales
                     range={range} setRange={changeRange}
@@ -250,6 +268,8 @@ export default function OrdersLedger({ branch } = {}) {
 
             {isShifts ? (
                 <ShiftHistory key="shifts" branch={branch} />
+            ) : isCredit ? (
+                <CreditRecordsTab key="credit" onChanged={refreshAll} />
             ) : (
                 <OrdersTable
                     key={tab}
@@ -291,4 +311,4 @@ export default function OrdersLedger({ branch } = {}) {
             />
         </div>
     );
-                                     }
+}
