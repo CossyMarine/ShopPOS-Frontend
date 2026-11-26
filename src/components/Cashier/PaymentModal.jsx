@@ -4,6 +4,7 @@ import { X, Banknote, Smartphone, Landmark, Layers, Gift, CheckCircle2, Printer,
 import API from '../../api/axios';
 import useConfirm from '../Storekeeper/useConfirm';
 import PrintReceipt from '../PrintReceipt';
+import CustomerNameInput from './CustomerNameInput';
 
 const METHODS = [
     { id: 'cash', label: 'Cash', icon: Banknote },
@@ -649,14 +650,15 @@ export default function PaymentModal({ receipt, onClose, onComplete }) {
                             </p>
                         </div>
                         <div>
-                            <label className={LABEL}>Customer name *</label>
-                            <input
-                                value={creditName}
-                                onChange={(e) => setCreditName(e.target.value)}
-                                placeholder="Full name"
-                                className={`${INPUT} !text-xl`}
-                            />
-                        </div>
+    <label className={LABEL}>Customer name *</label>
+    <CustomerNameInput
+        value={creditName}
+        onChange={setCreditName}
+        onPick={(c) => { if (c.phone) setCreditPhone(c.phone); }}
+        placeholder="Full name"
+        className={`${INPUT} !text-xl`}
+    />
+</div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className={LABEL}>Phone (optional)</label>
