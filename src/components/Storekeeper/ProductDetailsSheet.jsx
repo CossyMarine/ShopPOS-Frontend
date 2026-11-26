@@ -138,8 +138,9 @@ export default function ProductDetailsSheet({ product: p, branch, onClose }) {
 
                     {data && tab === 'sales' && (<>
                         <div className="grid grid-cols-2 gap-3">
-                            <Stat label="Units sold, 30 days" value={num(s.units)} sub={`${(s.units / 30).toFixed(1)} a day`} />
-                            <Stat label={inclusive ? 'Sales (excl. VAT)' : 'Sales'} value={money(s.net)} />
+                            <Stat label="Units sold, 30 days" value={num(s.units)}
+                                sub={`${(s.units / 30).toFixed(1)} a day${s.creditUnits > 0 ? ` · ${num(s.creditUnits)} on credit` : ''}`} />
+                            <Stat label={inclusive ? 'Sales (excl. VAT)' : 'Sales'} value={money(s.net)} sub={s.creditUnits > 0 ? 'Includes bills given on credit' : ''} />
                             <Stat label="Profit" value={signed(s.profit)} sub={s.net > 0 ? `${((s.profit / s.net) * 100).toFixed(1)}% margin` : ''} tone={s.profit >= 0 ? 'text-green-600' : 'text-red-600'} />
                             <Stat label="Days of stock left" value={s.units > 0 ? Math.floor(stock / (s.units / 30)) : 'No sales'}
                                 sub={s.units > 0 ? 'at the current pace' : 'Nothing sold in 30 days'} tone={s.units === 0 ? 'text-amber-600' : 'text-gray-900'} />
@@ -149,7 +150,15 @@ export default function ProductDetailsSheet({ product: p, branch, onClose }) {
                             ? <p className="text-sm text-gray-500 bg-white rounded-2xl p-4">No sales in the last 30 days. Consider a promotion for this item.</p>
                             : s.recent.map((r) => (
                                 <div key={r.billId + r.at} className="bg-white rounded-xl ring-1 ring-black/5 px-4 py-3 mb-2 flex justify-between gap-3 text-sm">
-                                    <div className="min-w-0"><p className="font-semibold text-gray-800">{r.billId}</p><p className="text-xs text-gray-500">{when(r.at)}{r.cashier ? ` · ${r.cashier}` : ''}</p></div>
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-gray-800">
+                                            {r.billId}
+                                            {r.onCredit && (
+                                                <span className="ml-2 align-middle text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">On credit</span>
+                                            )}
+                                        </p>
+                                        <p className="text-xs text-gray-500">{when(r.at)}{r.cashier ? ` · ${r.cashier}` : ''}</p>
+                                    </div>
                                     <p className="font-bold text-gray-900 shrink-0">{num(r.quantity)} × {money(r.unitPrice)}</p>
                                 </div>
                             ))}
@@ -172,4 +181,4 @@ export default function ProductDetailsSheet({ product: p, branch, onClose }) {
             </section>
         </div>
     );
-              }
+                    }
