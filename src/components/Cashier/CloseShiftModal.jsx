@@ -30,6 +30,8 @@ export default function CloseShiftModal({ open, shiftId, onClose, onClosed }) {
         setClosing(false);
     };
 
+    const hasCredit = summary && (summary.creditGiven > 0 || summary.creditCollected > 0);
+
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-200">
@@ -47,6 +49,17 @@ export default function CloseShiftModal({ open, shiftId, onClose, onClosed }) {
                         <Row label="Prompt (STK)" value={summary.promptSales} />
                         <Row label="Reward Payments" value={summary.rewardSales} />
                         <Row label="Petty Cash Out" value={-summary.pettyCashOut} />
+
+                        {hasCredit && (
+                            <div className="pt-1.5 mt-1.5 border-t border-gray-200 space-y-1.5">
+                                <Row label="Given on Credit (not cash)" value={summary.creditGiven} rose />
+                                {summary.creditCollected > 0 && (
+                                    <Row label="Credit paid back (in cash/till above)" value={summary.creditCollected} />
+                                )}
+                                <Row label="Total Sales (incl. credit)" value={summary.salesTotal} bold />
+                            </div>
+                        )}
+
                         <div className="pt-1.5 border-t border-gray-200 flex justify-between font-black text-gray-900">
                             <span>Expected Cash in Drawer</span>
                             <span>KES {summary.expectedCash.toLocaleString()}</span>
@@ -83,11 +96,11 @@ export default function CloseShiftModal({ open, shiftId, onClose, onClosed }) {
     );
 }
 
-function Row({ label, value }) {
+function Row({ label, value, rose, bold }) {
     return (
-        <div className="flex justify-between text-gray-600">
-            <span>{label}</span>
-            <span className="font-bold text-gray-800">KES {Number(value).toLocaleString()}</span>
+        <div className={`flex justify-between ${rose ? 'text-rose-600' : 'text-gray-600'}`}>
+            <span className={bold ? 'font-bold' : ''}>{label}</span>
+            <span className={`font-bold ${rose ? 'text-rose-600' : 'text-gray-800'}`}>KES {Number(value).toLocaleString()}</span>
         </div>
     );
-}
+        }
