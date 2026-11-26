@@ -40,12 +40,12 @@ export default function LoginPage({ onAuthed }) {
         <div className="relative w-full max-w-md">
           {/* Brand */}
           <div className="flex items-center justify-center lg:justify-start gap-3 mb-6">
-            <div className="w-11 h-11 rounded-xl bg-orange-500 flex items-center justify-center text-white shadow-lg shadow-orange-200">
+            <div className="w-11 h-11 rounded-xl bg-black flex items-center justify-center text-white shadow-lg shadow-orange-200">
               <ShoppingCart size={22} />
             </div>
             <div className="leading-tight">
               <div className="text-xl font-extrabold tracking-tight text-stone-900">
-                Chemaluk <span className="text-orange-500">Mugundoi</span>
+                Chemaluk <span className="text-black">Mugundoi</span>
               </div>
               <div className="text-[11px] font-bold uppercase tracking-[.25em] text-stone-400">
                 Supermarket
