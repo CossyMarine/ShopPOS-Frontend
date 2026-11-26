@@ -18,11 +18,11 @@ export default defineConfig({
       manifest: {
         id: "/",
 
-        name: "Chemalug Mugundoi Supermarket",
-        short_name: "Chemalug",
+        name: "Chemaluk Mugundoi Supermarket",
+        short_name: "Chemaluk",
 
         description:
-          "Chemalug Mugundoi Supermarket Point of Sale System. Manage sales, inventory, products and business operations.",
+          "Chemaluk Mugundoi Supermarket Point of Sale System. Manage sales, inventory, products and business operations.",
 
         lang: "en",
 
