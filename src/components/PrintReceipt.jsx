@@ -7,6 +7,15 @@ export default function PrintReceipt({ receipt }) {
     const dateStr = date.toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', year: 'numeric' });
     const timeStr = date.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit' });
 
+    // Bills given on credit carry a "credit" entry in payments[] (the sale, not money received)
+    const creditEntry = (receipt.payments || []).find((p) => p.method === 'credit');
+    const onCredit = receipt.status === 'credit' || !!creditEntry;
+    const creditCustomer = (creditEntry?.reference || '').replace(/^Credit\s*—\s*/, '');
+    const paidSoFar = Number((receipt.amountPaid || 0).toFixed(2));
+    const balanceOwed = receipt.status === 'credit'
+        ? Math.max(0, Number(((receipt.totalDue ?? receipt.subtotal) - paidSoFar).toFixed(2)))
+        : 0;
+
     return (
         <div id="print-receipt" className="hidden print:block font-mono text-black bg-white p-4 w-72 text-sm">
             <div className="text-center mb-2">
@@ -59,13 +68,28 @@ export default function PrintReceipt({ receipt }) {
             ) : (
                 <p className="font-bold">TOTAL                    KES {receipt.totalDue}</p>
             )}
-            {receipt.amountPaid > 0 && (
+
+            {onCredit ? (
                 <>
-                    <p>Amount Paid              KES {Number((receipt.amountPaid + (receipt.changeGiven || 0)).toFixed(2))}</p>
-                    <p>Change                   KES {receipt.changeGiven || 0}</p>
-                    <p>Payment: {receipt.paymentMethod}</p>
+                    <p>Payment: ON CREDIT</p>
+                    {creditCustomer && <p>Customer: {creditCustomer}</p>}
+                    {paidSoFar > 0 && <p>Paid so far              KES {paidSoFar}</p>}
+                    {balanceOwed > 0 ? (
+                        <p className="font-bold">BALANCE OWED            KES {balanceOwed}</p>
+                    ) : (
+                        <p>Credit settled in full</p>
+                    )}
                 </>
+            ) : (
+                receipt.amountPaid > 0 && (
+                    <>
+                        <p>Amount Paid              KES {Number((receipt.amountPaid + (receipt.changeGiven || 0)).toFixed(2))}</p>
+                        <p>Change                   KES {receipt.changeGiven || 0}</p>
+                        <p>Payment: {receipt.paymentMethod}</p>
+                    </>
+                )
             )}
+
             {receipt.rewardPointsEarned > 0 && (
                 <p>Points Earned            {receipt.rewardPointsEarned}</p>
             )}
@@ -76,4 +100,4 @@ export default function PrintReceipt({ receipt }) {
             </div>
         </div>
     );
-}
+                          }
