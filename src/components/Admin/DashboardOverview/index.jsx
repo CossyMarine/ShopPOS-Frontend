@@ -3,7 +3,7 @@ import { toast } from 'react-toastify';
 import API from '../../../api/axios';
 import { useAuth } from '../../../hooks/useAuth';
 import { useBranch } from '../../../context/BranchContext';
-import { setStoreConfig, formatDateTime } from '../../../utils/dashboardHelpers';
+import { setStoreConfig, formatDateTime, receiptPaymentInfo } from '../../../utils/dashboardHelpers';
 import { lineLabel, lineQtyPrice } from '../../../utils/packLine';
 import ViewItemsModal from '../ViewItemsModal';
 import { THEMES, RANGES } from './constants';
@@ -70,6 +70,19 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
   const liveDelay = range === 'year' || range === 'all' ? 10000 : 1500;
   useLiveRefresh(load, branch, branches, liveDelay);
 
+  // The recent-receipts list is a light summary (no payment history), so open
+  // the popup straight away with what we have, then swap in the full receipt —
+  // needed to show credit details (given on credit, still owing, when paid).
+  const openReceipt = async (r) => {
+    setViewing(r);
+    try {
+      const res = await API.get(`/receipts/${r._id}`);
+      setViewing(res.data);
+    } catch (e) {
+      console.error('Could not load full receipt', e);
+    }
+  };
+
   return (
     <div className={`dash rounded-3xl p-4 lg:p-6 space-y-6 text-ink min-h-full pb-24 ${loading ? 'busy' : ''}`} data-theme={theme}>
       {/* HEADER */}
@@ -133,7 +146,7 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
             {D.branches.length > 1 && <BranchCard D={D} T={T} />}
           </section>
 
-          <Receipts D={D} onView={setViewing} />
+          <Receipts D={D} onView={openReceipt} />
         </div>
       )}
 
@@ -147,11 +160,8 @@ export default function DashboardOverview({ branch, rmDue = 0, onOpenReminders }
           return { name: lineLabel(i), qty: l.qty, price: l.price };
         })}
         total={viewing?.totalDue ?? viewing?.subtotal}
-        payment={viewing && viewing.status === 'paid' ? {
-          method: viewing.paymentMethod, cashAmount: viewing.cashAmount, tillAmount: viewing.tillAmount,
-          changeGiven: viewing.changeGiven, mpesaReceiptNumber: viewing.mpesaReceiptNumber, paidAt: viewing.paidAt,
-        } : null}
+        payment={receiptPaymentInfo(viewing)}
       />
     </div>
   );
-      }
+          }
