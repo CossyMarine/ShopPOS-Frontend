@@ -45,7 +45,7 @@ export default function LoginPage({ onAuthed }) {
             </div>
             <div className="leading-tight">
               <div className="text-xl font-extrabold tracking-tight text-stone-900">
-                Chemalug <span className="text-orange-500">Mugundoi</span>
+                Chemaluk <span className="text-orange-500">Mugundoi</span>
               </div>
               <div className="text-[11px] font-bold uppercase tracking-[.25em] text-stone-400">
                 Supermarket
