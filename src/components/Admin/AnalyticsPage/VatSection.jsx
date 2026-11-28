@@ -1,5 +1,11 @@
 import { money } from './utils';
 
+// VAT figures are shown to 2 decimals (needed for filing). Other money stays whole shillings.
+const m2 = (n) => {
+    const v = Number(n || 0);
+    return `${v < 0 ? '-' : ''}KES ${Math.abs(v).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 const CLASS_NAMES = {
     standard: ['Standard-rated', 'VAT charged at the shop rate'],
     zero: ['Zero-rated', 'VAT charged at 0%. Tax paid on purchases can still be claimed'],
@@ -38,15 +44,18 @@ export default function VatSection({ vat }) {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                <Tile label="VAT collected from customers" value={money(totals.vat)} />
-                <Tile label="VAT you can claim back" value={money(totals.claimable)} />
-                <Tile label="Not claimable (marked on deliveries)" value={money(totals.notClaimable)} />
+                <Tile label="Output VAT (collected from customers)" value={m2(totals.vat)} />
+                <Tile label="Input VAT (you can claim back)" value={m2(totals.claimable)} />
+                <Tile label="Not claimable (added to cost)" value={m2(totals.notClaimable)} />
                 <Tile
-                    label={owing ? 'Set aside for VAT' : 'VAT you may get back'}
-                    value={money(Math.abs(totals.payable))}
+                    label={owing ? 'VAT payable (set aside)' : 'VAT you may get back'}
+                    value={m2(Math.abs(totals.payable))}
                     tone={owing ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}
                 />
             </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+                VAT payable = output VAT {m2(totals.vat)} − input VAT {m2(totals.claimable)} = <b>{m2(totals.payable)}</b>
+            </p>
 
             <div className="grid md:grid-cols-3 gap-4 mt-4 text-xs text-gray-600">
                 <p><span className="block font-bold text-gray-800 text-sm">1. Collected</span>VAT is added to standard-rated items. The shop holds this money for the government.</p>
@@ -71,7 +80,7 @@ export default function VatSection({ vat }) {
                                 <tr key={c.vatClass}>
                                     <td className="py-2 pr-3"><p className="font-bold text-gray-800">{name}</p><p className="text-[11px] text-gray-500">{note}</p></td>
                                     <td className="py-2 pr-3 text-right font-mono">{money(c.net)}</td>
-                                    <td className="py-2 pr-3 text-right font-mono">{money(c.vat)}</td>
+                                    <td className="py-2 pr-3 text-right font-mono">{m2(c.vat)}</td>
                                     <td className="py-2 text-right font-mono">{((c.net / netAll) * 100).toFixed(1)}%</td>
                                 </tr>
                             );
@@ -83,10 +92,10 @@ export default function VatSection({ vat }) {
             {derived?.receipts > 0 && (
                 <p className="text-[11px] text-gray-500 mt-3">
                     {derived.receipts} receipt{derived.receipts === 1 ? '' : 's'} ({day(derived.from)} to {day(derived.to)}) were sold while VAT was off.
-                    Their VAT of {money(totals.derivedVat)} is worked out from item prices, treating the price paid as VAT-inclusive. It was not collected separately.
+                    Their VAT of {m2(totals.derivedVat)} is worked out from item prices, treating the price paid as VAT-inclusive. It was not collected separately.
                 </p>
             )}
             <p className="text-[11px] text-gray-400 mt-1">Confirm final figures for filing with your accountant.</p>
         </div>
     );
-                                  }
+}
