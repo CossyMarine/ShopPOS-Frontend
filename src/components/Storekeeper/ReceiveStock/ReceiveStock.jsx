@@ -36,7 +36,8 @@ export default function ReceiveStock({ products, suppliers, branch, focusReq, on
 
                 {shown.map(({ l, i, p }) => (
                     <Line key={l.id} l={l} p={p} c={r.D.L[i].c} flags={r.flags[i]} patch={(x) => r.patchLine(l.id, x)}
-                        onRemove={() => r.removeLine(l)} onEdit={() => onEditProduct(p)} branch={branch} onImageChanged={onProductsChanged} />
+                        onRemove={() => r.removeLine(l)} onEdit={() => onEditProduct(p)} branch={branch} onImageChanged={onProductsChanged}
+                        vatOn={r.inv.vatOn} vatRate={r.vatCfg.rate} /> // CHANGED
                 ))}
                 {lossOnly && rows.length > 0 && !shown.length && <div className="text-center py-10 rounded-2xl bg-emerald-50 text-emerald-700 text-sm font-bold">No loss-making products in this delivery 🎉</div>}
                 {!r.visible.length && <div className="text-center py-14 rounded-2xl border-2 border-dashed border-gray-300 text-gray-400 text-sm"><Package size={44} className="mx-auto mb-2" />No products yet. Scan or search above.</div>}
@@ -45,7 +46,7 @@ export default function ReceiveStock({ products, suppliers, branch, focusReq, on
                     showDel={r.showDel} setShowDel={r.setShowDel} dueNote={r.dueNote} />
             </div>
 
-            <InvoiceSummary inv={r.inv} setI={r.setI} T={r.T} issues={r.issues} hiddenCount={r.hiddenCount} saving={r.saving}
+            <InvoiceSummary inv={r.inv} setI={r.setI} T={r.T} vatCfg={r.vatCfg} issues={r.issues} hiddenCount={r.hiddenCount} saving={r.saving}
                 confirmLabel={focusProduct ? `Confirm ${focusProduct.name} and add to stock` : 'Confirm and add to stock'}
                 onIssueClick={() => { r.setFocus(null); document.getElementById('top')?.scrollIntoView(); }}
                 onConfirm={() => r.confirmAll(false)} />
