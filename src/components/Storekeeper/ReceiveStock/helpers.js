@@ -5,7 +5,15 @@ export const ceil5 = (x) => Math.ceil(x / 5) * 5;
 export const nid = () => Math.random().toString(36).slice(2, 9);
 export const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
 export const TERMS = ['Cash on delivery', '7 days', '14 days', '30 days', '60 days'];
-export const blankInv = (by = '') => ({ supplier: '', saveSupplier: true, invoice: '', po: '', ddate: today(), driver: '', terms: 'Cash on delivery', recvBy: by, note: '', discPct: '', discAmt: '', delivery: '', vatOn: false, vatMode: 'excl', vatNR: false });
+
+// CHANGED: added etimsNo and vatTouched.
+// vatTouched stays false until the storekeeper clicks the VAT box, so until then
+// the VAT default follows Admin Settings.
+export const blankInv = (by = '') => ({
+    supplier: '', saveSupplier: true, invoice: '', etimsNo: '', po: '', ddate: today(), driver: '',
+    terms: 'Cash on delivery', recvBy: by, note: '', discPct: '', discAmt: '', delivery: '',
+    vatOn: false, vatTouched: false, vatMode: 'excl', vatNR: false,
+});
 
 export const unitList = (p) => [...packsOf(p).map((k) => ({ key: String(k._id), name: k.name, qty: k.qty })), { key: 'b', name: baseAbbr(p), qty: 1, base: true }];
 export const qtyOf = (p, key) => unitTable(p)[key]?.qty || 1;
@@ -25,6 +33,7 @@ export const toWire = (l) => ({
     items: l.mix ? Object.entries(l.q).map(([key, qty]) => ({ key, qty })) : [{ key: l.unit, qty: l.qty }],
     priceUnit: l.priceUnit, price: l.price, discounts: l.discs.map(({ type, val, unit }) => ({ type, val, unit })),
     rejected: l.rej, expiryDate: l.exp || null, batchNo: l.batch, newPrice: l.newPrice, packPrices: l.pp,
+    vatClass: l.vatClass, // CHANGED: undefined means "use the product's own VAT class"
 });
 
 export function flagsFor(l, p, c) {
