@@ -9,7 +9,8 @@ import LineOptions from './LineOptions';
 import LineMetrics from './LineMetrics';
 import ProductImage from '../ProductImage';
 
-export default function Line({ l, p, c, flags, patch, onRemove, onEdit, branch, onImageChanged }) {
+// CHANGED: new props vatOn and vatRate
+export default function Line({ l, p, c, flags, patch, onRemove, onEdit, branch, onImageChanged, vatOn, vatRate }) {
     const abbr = baseAbbr(p), hasPacks = (p.packs || []).length > 0;
     const last = lastBatch(p);
 
@@ -34,6 +35,20 @@ export default function Line({ l, p, c, flags, patch, onRemove, onEdit, branch, 
             <LineDiscounts l={l} p={p} c={c} patch={patch} />
             <LineProfit l={l} p={p} c={c} />
             <LineOptions l={l} p={p} c={c} patch={patch} />
+
+            {/* CHANGED: per-line VAT class. Defaults to the product's class; change it if the invoice says otherwise. */}
+            {vatOn && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-semibold text-gray-500">VAT on this line</span>
+                    <select className="input !w-auto !py-1 text-xs" value={l.vatClass || p.vatClass || 'standard'} onChange={(e) => patch({ vatClass: e.target.value })}>
+                        <option value="standard">Standard ({vatRate}%)</option>
+                        <option value="zero">Zero-rated</option>
+                        <option value="exempt">Exempt</option>
+                    </select>
+                    <span className="text-gray-500">{c.vat > 0 ? `VAT KES ${money(c.vat)}` : 'No VAT'}</span>
+                </div>
+            )}
+
             <LineMetrics l={l} p={p} c={c} flags={flags} />
         </div>
     );
