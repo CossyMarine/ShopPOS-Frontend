@@ -6,6 +6,7 @@ import { calcDelivery, stockOf, r2 } from '../../../utils/receivingMath';
 import { money } from '../productManagementUtils';
 import { today, blankInv, unitList, qtyOf, bigKey, newLine, toWire, flagsFor } from './helpers';
 import useConfirm from '../useConfirm';
+import useVatSettings from '../../CashierPage/hooks/useVatSettings'; // CHANGED
 
 export default function useReceiveStock({ products, suppliers, branch, focusReq, onDone, onCreateProduct }) {
     const { user } = useAuth();
@@ -19,6 +20,11 @@ export default function useReceiveStock({ products, suppliers, branch, focusReq,
     const [showDel, setShowDel] = useState(false);
     const [saving, setSaving] = useState(false);
     const loaded = useRef(false);
+
+    // CHANGED: VAT settings from Admin Settings (null until loaded)
+    const vatSettings = useVatSettings();
+    const registered = !!vatSettings?.enabled;
+    const vatRate = Number(vatSettings?.rate) > 0 ? Number(vatSettings.rate) : 16;
 
     const active = useMemo(() => products.filter((p) => p.isActive !== false), [products]);
     const byId = useMemo(() => new Map(products.map((p) => [String(p._id), p])), [products]);
@@ -109,12 +115,21 @@ export default function useReceiveStock({ products, suppliers, branch, focusReq,
     const visible = focus ? valid.filter((l) => l.pid === focus) : valid;
     const hiddenCount = valid.length - visible.length;
 
-    const wire = { lines: visible.map(toWire), discPct: inv.discPct, discAmt: inv.discAmt, delivery: inv.delivery, vatOn: inv.vatOn, vatMode: inv.vatMode, vatNR: inv.vatNR };
+    // CHANGED: effective VAT values.
+    // - vatOn follows Admin Settings until the storekeeper clicks the box
+    // - if the shop is not VAT-registered, VAT can't be claimed, so it always goes into cost
+    // (the server enforces the same rules, this keeps the screen in step with it)
+    const vatOn = inv.vatTouched ? inv.vatOn : registered;
+    const vatNR = vatSettings && !registered ? true : inv.vatNR;
+
+    const wire = { lines: visible.map(toWire), discPct: inv.discPct, discAmt: inv.discAmt, delivery: inv.delivery, vatOn, vatMode: inv.vatMode, vatNR, vatRate };
     const D = visible.length ? calcDelivery(wire, byId) : null;
-    const T = D?.totals || { gross: 0, lineDisc: 0, invDisc: 0, free: 0, vat: 0, delivery: 0, total: 0, saved: 0 };
+    const T = D?.totals || { gross: 0, lineDisc: 0, invDisc: 0, free: 0, exVat: 0, vat: 0, delivery: 0, total: 0, saved: 0 };
     const flags = visible.map((l, i) => flagsFor(l, byId.get(String(l.pid)), D.L[i].c));
     const issues = []; visible.forEach((l, i) => flags[i].forEach((f) => { if (f[0] !== 'info') issues.push({ lvl: f[0], id: l.id, name: byId.get(String(l.pid)).name, msg: f[1] }); }));
-    const setI = (k, v) => setInv((s) => ({ ...s, [k]: v }));
+
+    // CHANGED: clicking the VAT box marks it as the storekeeper's own choice
+    const setI = (k, v) => setInv((s) => ({ ...s, [k]: v, ...(k === 'vatOn' ? { vatTouched: true } : {}) }));
     const dueNote = inv.terms === 'Cash on delivery' ? 'Payment: on delivery.' : `Payment due ${new Date(new Date(inv.ddate || today()).getTime() + parseInt(inv.terms, 10) * 864e5).toLocaleDateString()} (${inv.terms}).`;
 
     const confirmAll = async (allowDuplicate = false) => {
@@ -132,7 +147,7 @@ export default function useReceiveStock({ products, suppliers, branch, focusReq,
             const { data } = await API.post('/goods-receipts', {
                 ...wire, branch, allowDuplicate,
                 supplier: supplierMatch?._id || null, supplierName: inv.supplier.trim(), createSupplier: !supplierMatch && !!inv.supplier.trim() && inv.saveSupplier,
-                invoice: inv.invoice, po: inv.po, deliveryDate: inv.ddate, driver: inv.driver, terms: inv.terms, receivedByName: inv.recvBy, note: inv.note,
+                invoice: inv.invoice, etimsNo: inv.etimsNo, po: inv.po, deliveryDate: inv.ddate, driver: inv.driver, terms: inv.terms, receivedByName: inv.recvBy, note: inv.note, // CHANGED: etimsNo
             });
             // Remove only the lines that were saved. Other lines stay in the draft.
             const savedIds = new Set(visible.map((l) => l.id));
@@ -161,7 +176,9 @@ export default function useReceiveStock({ products, suppliers, branch, focusReq,
 
     return {
         byId, focus, setFocus, search, setSearch, showRes, setShowRes, showDel, setShowDel, saving,
-        inv, setI, hits, onEnter, addLine, addLow, patchLine, removeLine,
+        inv: { ...inv, vatOn, vatNR }, // CHANGED: the screen sees the effective VAT values
+        vatCfg: { registered, rate: vatRate }, // CHANGED
+        setI, hits, onEnter, addLine, addLow, patchLine, removeLine,
         supplierMatch, valid, visible, hiddenCount, D, T, flags, issues, dueNote, confirmAll,
         confirmDialog,
     };
